@@ -16,62 +16,71 @@ param (
     [string]$Environment = "dev",
 
     [Parameter(Mandatory=$false)]
-    [string]$TfStateStorageAccount = "stotfstatebrnd"
+    [string]$TfStateStorageAccount = "",
+
+    [Parameter(Mandatory=$false)]
+    [switch]$AutoApprove
 )
 
 Set-StrictMode -Version Latest
-Set-Variable -Name ErrorActionPreference -Value 'Stop'
+$ErrorActionPreference = 'Stop'
 
 # Import common functions
 Import-Module "$PSScriptRoot\common\DeploymentFunctions.psm1" -Force
 
-function Connect-AzureSubscription {
+# Import Azure resources that exist but are missing from Terraform state
+# (e.g. after a partial apply). Safe to call repeatedly — skips resources already in state.
+function Import-ExistingResources {
     param(
-        [string]$SubscriptionId
+        [string]$SubscriptionId,
+        [string]$Environment
     )
-    
-    Write-Title "Azure Authentication"
-    
-    # Configure Azure CLI
-    Write-Info "Configuring Azure CLI..."
-    az config set core.enable_broker_on_windows=false | Out-Null
-    az config set core.login_experience_v2=off | Out-Null
-    
-    # Check current authentication
-    try {
-        $currentAccount = az account show --query "id" -o tsv 2>$null
-        if ($currentAccount) {
-            Write-Success "Already authenticated to Azure"
-        } else {
-            throw "Not authenticated"
+
+    $resourceToken     = Get-ResourceToken -SubscriptionId $SubscriptionId
+    $resourceGroupName = "rg-brnd-$Environment-$resourceToken"
+
+    $imports = @(
+        @{
+            State  = 'azurerm_container_app_environment.main'
+            AzArgs = @('containerapp', 'env', 'show', '--name', "cae-brnd-$Environment", '--resource-group', $resourceGroupName, '--query', 'id', '-o', 'tsv')
+        },
+        @{
+            State  = 'module.container_apps.azurerm_container_app.main'
+            AzArgs = @('containerapp', 'show', '--name', 'brnd-api', '--resource-group', $resourceGroupName, '--query', 'id', '-o', 'tsv')
+        },
+        @{
+            State  = 'module.container_apps_ui.azurerm_container_app.main'
+            AzArgs = @('containerapp', 'show', '--name', 'brnd-ui', '--resource-group', $resourceGroupName, '--query', 'id', '-o', 'tsv')
         }
-    } catch {
-        Write-Info "Logging into Azure..."
-        az login | Out-Null
-    }
-    
-    # Set subscription
-    if ($SubscriptionId) {
-        Write-Info "Setting subscription to: $SubscriptionId"
-        az account set --subscription $SubscriptionId
+    )
+
+    # Snapshot current state once (avoids repeated terraform state list calls)
+    $stateLines = & { $ErrorActionPreference = 'SilentlyContinue'; terraform state list 2>&1 } |
+                    Where-Object { $_ -is [string] }
+
+    foreach ($item in $imports) {
+        if ($stateLines -contains $item.State) {
+            Write-Host "  Already in state: $($item.State)" -ForegroundColor Gray
+            continue
+        }
+
+        # Resolve Azure resource ID; silence stderr to avoid NativeCommandError
+        $azIdLines = & { $ErrorActionPreference = 'SilentlyContinue'; az @($item.AzArgs) 2>&1 } |
+                       Where-Object { $_ -is [string] }
+        $azId = ($azIdLines -join '').Trim()
+        if (-not $azId) {
+            Write-Host "  Not found in Azure (skipping): $($item.State)" -ForegroundColor Gray
+            continue
+        }
+
+        Write-Host "Importing $($item.State) into Terraform state..." -ForegroundColor Cyan
+        & { $ErrorActionPreference = 'SilentlyContinue'; terraform import $item.State $azId 2>&1 } |
+            ForEach-Object { Write-Host $_ }
         if ($LASTEXITCODE -ne 0) {
-            Write-Error "Failed to set subscription"
-            return $false
+            Write-Host "WARNING: Import of $($item.State) failed - continuing." -ForegroundColor Yellow
         }
-    } else {
-        Write-Info "Using default/current subscription"
     }
-    
-    # Get subscription details
-    $subscription = az account show --query "{name: name, id: id}" -o json | ConvertFrom-Json
-    Write-Success "Connected to: $($subscription.name)"
-    Write-Info "Subscription ID: $($subscription.id)"
-    
-    return $subscription.id
 }
-
-
-
 
 function New-TerraformVarsFile {
     param(
@@ -94,8 +103,7 @@ function New-TerraformVarsFile {
             return $false
         }
         
-        $timestamp = Get-Date -Format "yyyyMMddHHmmss"
-        $resourceToken = Get-RandomAlphaNumeric -Length 8 -Seed $timestamp
+        $resourceToken = Get-ResourceToken -SubscriptionId $SubscriptionId
         
         # Load template
         $templatePath = Join-Path $PSScriptRoot "..\infra\terraform.tfvars.tpl"
@@ -112,7 +120,6 @@ function New-TerraformVarsFile {
         $content = $content -replace '\$\{Location\}', $Location
         $content = $content -replace '\$\{Environment\}', $Environment
         $content = $content -replace '\$\{ResourceToken\}', $resourceToken
-        $content = $content -replace '\$\{Timestamp\}', $timestamp
         
         $tfvarsPath = Join-Path -Path $absolutePath -ChildPath "terraform.tfvars"
         Set-Content -Path $tfvarsPath -Value $content -Encoding UTF8 -Force -ErrorAction Stop
@@ -158,272 +165,100 @@ function Test-Prerequisites {
     try {
         $account = az account show --output json | ConvertFrom-Json
         Write-Success "Azure authentication verified"
-        Write-Host "Subscription: $($account.name) ($($account.id.Substring(0, 8))...)" -ForegroundColor Gray
+        $shortId = $account.id.Substring(0, 8)
+        Write-Host "Subscription: $($account.name) ($shortId...)" -ForegroundColor Gray
     } catch {
         $missingTools += "Azure CLI authentication (Run 'az login')"
     }
     
     if ($missingTools.Count -gt 0) {
-        Write-Error "Missing prerequisites:"
+        Write-Host "Missing prerequisites:" -ForegroundColor Red
         $missingTools | ForEach-Object { Write-Host "  - $_" -ForegroundColor Red }
-        exit 1
+        return $false
     }
     
     Write-Success "All prerequisites met"
     return $true
 }
 
-function Initialize-Terraform {
-    param([string]$StorageAccountName = $TfStateStorageAccount)
-    Write-Title "Initializing Terraform"
-    
-    terraform init `
-        -backend-config="storage_account_name=$StorageAccountName" `
-        -reconfigure
-    
-    if ($LASTEXITCODE -eq 0) {
-        Write-Success "Terraform initialized successfully"
-        return $true
-    } else {
-        Write-Error "Terraform initialization failed"
-        return $false
-    }
-}
+function Invoke-TerraformApplyWithRetry {
+    param(
+        [string]$SuccessMessage = "Deployment applied successfully",
+        [int]$MaxRetries = 3,
+        [int]$DelaySeconds = 30
+    )
 
-function Validate-Configuration {
-    Write-Title "Validating Terraform Configuration"
-    
-    terraform validate
-    
-    if ($LASTEXITCODE -eq 0) {
-        Write-Success "Configuration is valid"
-        return $true
-    } else {
-        Write-Error "Configuration validation failed"
-        return $false
-    }
-}
+    $retryCount = 0
+    $applySuccess = $false
 
-function Plan-Deployment {
-    Write-Title "Planning Terraform Deployment"
-    
-    Write-Info "Generating execution plan..."
-    terraform plan -out=tfplan
-    
-    if ($LASTEXITCODE -eq 0) {
-        Write-Success "Plan created successfully"
-        
-        # Show summary
-        try {
-            $planOutput = terraform show -json tfplan | ConvertFrom-Json
-            $resourceChanges = @{
-                create = ($planOutput.resource_changes | Where-Object { $_.change.actions -contains "create" }).Count
-                update = ($planOutput.resource_changes | Where-Object { $_.change.actions -contains "update" }).Count
-                delete = ($planOutput.resource_changes | Where-Object { $_.change.actions -contains "delete" }).Count
+    while ($retryCount -lt $MaxRetries -and -not $applySuccess) {
+        $retryCount++
+        Write-Host ""
+        Write-Host "Applying... (Attempt $retryCount of $MaxRetries)" -ForegroundColor Yellow
+
+        # Re-plan on retries to avoid "Saved plan is stale" error
+        if ($retryCount -gt 1) {
+            Write-Host "Re-planning after partial apply..." -ForegroundColor Cyan
+            terraform plan -out=tfplan
+            if ($LASTEXITCODE -ne 0) {
+                Write-Host "Re-plan failed" -ForegroundColor Red
+                exit 1
             }
-            
-            Write-Host ""
-            Write-Host "Resource Changes Summary:" -ForegroundColor Cyan
-            Write-Host "  Create: $($resourceChanges.create) resources"
-            Write-Host "  Update: $($resourceChanges.update) resources"
-            Write-Host "  Delete: $($resourceChanges.delete) resources"
-            Write-Host ""
-        } catch {
-            Write-Warning "Could not parse plan summary"
         }
-        return $true
-    } else {
-        Write-Error "Plan creation failed"
-        return $false
-    }
-}
 
-function Apply-Deployment {
-    Write-Title "Applying Terraform Configuration"
-    Write-Warning "This will create/modify Azure resources"
-    
-    if (-not (Test-Path "tfplan")) {
-        Write-Warning "Plan file not found. Creating new plan..."
-        if (-not (Plan-Deployment)) {
-            return $false
+        terraform apply tfplan
+        if ($LASTEXITCODE -eq 0) {
+            $applySuccess = $true
+            Write-Success $SuccessMessage
+            terraform output
+        } else {
+            if ($retryCount -lt $MaxRetries) {
+                Write-Host "Deployment attempt $retryCount failed. Waiting $DelaySeconds seconds before retry..." -ForegroundColor Yellow
+                Start-Sleep -Seconds $DelaySeconds
+            } else {
+                Write-Host "Deployment failed after $MaxRetries attempts" -ForegroundColor Red
+                exit 1
+            }
         }
     }
-    
-    $confirmation = Read-Host "Type 'yes' to confirm deployment"
-    if ($confirmation -ne "yes") {
-        Write-Host "Deployment cancelled" -ForegroundColor Yellow
-        return $false
-    }
-    
-    Write-Info "Applying infrastructure changes..."
-    Write-Host "This may take 10-15 minutes..." -ForegroundColor Cyan
-    
-    terraform apply tfplan
-    
-    if ($LASTEXITCODE -eq 0) {
-        Write-Success "Deployment applied successfully"
-        Show-Outputs
-        return $true
-    } else {
-        Write-Error "Deployment failed"
-        return $false
-    }
-}
-
-function Show-Outputs {
-    Write-Title "Deployment Outputs"
-    
-    if (-not (Test-Path .terraform)) {
-        Write-Warning "Terraform not initialized. Run 'init' action first."
-        return $false
-    }
-    
-    terraform output
-    return $true
-}
-
-function Get-TerraformOutputs {
-    if (-not (Test-Path .terraform)) {
-        return $null
-    }
-    
-    try {
-        $outputs = terraform output -json | ConvertFrom-Json
-        return $outputs
-    } catch {
-        return $null
-    }
-}
-
-function Destroy-Resources {
-    Write-Title "Destroying Resources"
-    Write-Host "WARNING: All resources created by Terraform will be permanently deleted!" -ForegroundColor Red
-    
-    Write-Host ""
-    $confirmation = Read-Host "Type 'yes' to confirm resource deletion"
-    if ($confirmation -ne "yes") {
-        Write-Host "Destruction cancelled" -ForegroundColor Yellow
-        return $false
-    }
-    
-    Write-Info "Generating destruction plan..."
-    Write-Host ""
-    terraform plan -destroy
-    
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "ERROR: Failed to generate destruction plan" -ForegroundColor Red
-        return $false
-    }
-    
-    Write-Host ""
-    Write-Info "Destroying infrastructure..."
-    terraform destroy -auto-approve -verbose
-    
-    if ($LASTEXITCODE -eq 0) {
-        Write-Success "Resources destroyed successfully"
-        return $true
-    } else {
-        Write-Host "ERROR: Destruction failed" -ForegroundColor Red
-        return $false
-    }
-}
-
-function Format-Code {
-    Write-Title "Formatting Terraform Code"
-    
-    terraform fmt -recursive
-    
-    if ($LASTEXITCODE -eq 0) {
-        Write-Success "Code formatted"
-        return $true
-    } else {
-        Write-Error "Code formatting failed"
-        return $false
-    }
-}
-
-function Clean-State {
-    Write-Title "Cleaning Local State"
-    Write-Warning "This will remove local Terraform files!"
-    
-    $confirmation = Read-Host "Type 'yes' to confirm"
-    if ($confirmation -ne "yes") {
-        Write-Host "Clean cancelled" -ForegroundColor Yellow
-        return $false
-    }
-    
-    Write-Info "Removing Terraform state files and cache..."
-    Remove-Item -Path ".terraform" -Recurse -Force -ErrorAction SilentlyContinue
-    Remove-Item -Path ".terraform.lock.hcl" -Force -ErrorAction SilentlyContinue
-    Remove-Item -Path "tfplan" -Force -ErrorAction SilentlyContinue
-    Remove-Item -Path "*.tfstate*" -Force -ErrorAction SilentlyContinue
-    
-    Write-Success "State cleaned"
-    return $true
 }
 
 # Main execution
-Write-Title "Azure AI Foundry ITSM - Infrastructure Deployment"
+Write-Title "BrandSense - Infrastructure Deployment"
 
 # Check prerequisites
-Write-Info "Checking prerequisites..."
 if (-not (Test-Prerequisites)) {
-    Write-Error "Prerequisites check failed"
+    Write-Host "Prerequisites check failed" -ForegroundColor Red
     exit 1
 }
 
-# Handle destroy action
-if ($Action -eq "destroy") {
-    Write-Info "Executing destroy action..."
-    if (-not (Test-Prerequisites)) {
-        Write-Error "Prerequisites check failed"
-        exit 1
-    }
-    
-    $subscriptionId = Connect-AzureSubscription -SubscriptionId $Subscription
-    if (-not $subscriptionId) {
-        Write-Error "Failed to connect to Azure"
-        exit 1
-    }
-    
-    $infraDir = Join-Path $PSScriptRoot "..\infra"
-    Set-Location -Path $infraDir
-    
-    if (Destroy-Resources) {
-        exit 0
-    } else {
-        exit 1
-    }
+# Authenticate and set subscription (idempotent; safe if parent already called)
+Initialize-AzureContext -Subscription $Subscription
+$subscriptionId = az account show --query id -o tsv
+
+# Derive storage account name from subscription ID if not supplied
+if (-not $TfStateStorageAccount) {
+    $suffix = ($subscriptionId -replace '-', '').Substring(0, 8).ToLower()
+    $TfStateStorageAccount = "stotfbrnd$suffix"
+    Write-Info "TF state storage account: $TfStateStorageAccount"
 }
 
-# Initialize if needed for deployment actions
-if ($Action -in @("init", "plan", "apply", "all", "validate")) {
-    Write-Info "Preparing for deployment action: $Action"
-    
-    # Connect to Azure
-    Write-Info "Connecting to Azure subscription..."
-    $subscriptionId = Connect-AzureSubscription -SubscriptionId $Subscription
-    if (-not $subscriptionId) {
-        Write-Error "Failed to connect to Azure"
-        exit 1
-    }
-}
-
-# Change to infra directory
+# Change to infra directory (restore on exit via finally block)
 $infraDir = Join-Path $PSScriptRoot "..\infra"
-Write-Info "Changing to infrastructure directory: $infraDir"
 if (-not (Test-Path $infraDir)) {
-    Write-Error "Infrastructure directory not found: $infraDir"
+    Write-Host "Infrastructure directory not found: $infraDir" -ForegroundColor Red
     exit 1
 }
 
-Set-Location -Path $infraDir
+Push-Location -Path $infraDir
 
-# Generate terraform.tfvars now that we're in the infra directory
+try {
+
+# Generate terraform.tfvars for deployment actions
 if ($Action -in @("init", "plan", "apply", "all", "validate")) {
     Write-Info "Generating terraform.tfvars..."
     if (-not (New-TerraformVarsFile -SubscriptionId $subscriptionId -Location $Location -Environment $Environment -OutputPath ".")) {
-        Write-Error "Failed to generate terraform.tfvars"
+        Write-Host "Failed to generate terraform.tfvars" -ForegroundColor Red
         exit 1
     }
 }
@@ -438,126 +273,132 @@ switch ($Action.ToLower()) {
             -backend-config="storage_account_name=$TfStateStorageAccount" `
             -reconfigure
         if ($LASTEXITCODE -ne 0) {
-            Write-Error "Terraform initialization failed"
+            Write-Host "Terraform initialization failed" -ForegroundColor Red
             exit 1
         }
         Write-Success "Terraform initialized successfully"
     }
     "validate" {
         Write-Title "Validating Terraform Configuration"
-        Initialize-Terraform
+        terraform init `
+            -backend-config="storage_account_name=$TfStateStorageAccount" `
+            -reconfigure
         if ($LASTEXITCODE -ne 0) { exit 1 }
-        
+
         terraform validate
         if ($LASTEXITCODE -ne 0) {
-            Write-Error "Configuration validation failed"
+            Write-Host "Configuration validation failed" -ForegroundColor Red
             exit 1
         }
         Write-Success "Configuration is valid"
     }
     "plan" {
         Write-Title "Planning Terraform Deployment"
-        Initialize-Terraform
+        terraform init `
+            -backend-config="storage_account_name=$TfStateStorageAccount" `
+            -reconfigure
         if ($LASTEXITCODE -ne 0) { exit 1 }
-        
+
         terraform validate
         if ($LASTEXITCODE -ne 0) { exit 1 }
-        
+
         Write-Info "Generating execution plan..."
         terraform plan -out=tfplan
         if ($LASTEXITCODE -ne 0) {
-            Write-Error "Plan creation failed"
+            Write-Host "Plan creation failed" -ForegroundColor Red
             exit 1
         }
         Write-Success "Plan created successfully"
     }
     "apply" {
         Write-Title "Applying Terraform Configuration"
-        Initialize-Terraform
+        terraform init `
+            -backend-config="storage_account_name=$TfStateStorageAccount" `
+            -reconfigure
         if ($LASTEXITCODE -ne 0) { exit 1 }
-        
+
         terraform validate
         if ($LASTEXITCODE -ne 0) { exit 1 }
-        
+
+        # Import any resources that exist in Azure but are absent from state
+        Write-Info "Checking for state drift (importing orphaned resources)..."
+        Import-ExistingResources -SubscriptionId $subscriptionId -Environment $Environment
+
         terraform plan -out=tfplan
         if ($LASTEXITCODE -ne 0) { exit 1 }
-        
-        Write-Warning "This will create/modify Azure resources"
-        Write-Host "Applying infrastructure changes..." -ForegroundColor Cyan
-        Write-Host "This may take 15-30 minutes (APIM deployment is slow)..." -ForegroundColor Cyan
-        
-        $maxRetries = 3
-        $retryCount = 0
-        $applySuccess = $false
-        
-        while ($retryCount -lt $maxRetries -and -not $applySuccess) {
-            $retryCount++
-            Write-Host ""
-            Write-Host "Applying... (Attempt $retryCount of $maxRetries)" -ForegroundColor Yellow
-            
-            terraform apply tfplan
-            if ($LASTEXITCODE -eq 0) {
-                $applySuccess = $true
-                Write-Success "Deployment applied successfully"
-                terraform output
-            } else {
-                if ($retryCount -lt $maxRetries) {
-                    Write-Host "Deployment attempt $retryCount failed. Waiting 30 seconds before retry..." -ForegroundColor Yellow
-                    Start-Sleep -Seconds 30
-                } else {
-                    Write-Error "Deployment failed after $maxRetries attempts"
-                    exit 1
-                }
+
+        if (-not $AutoApprove) {
+            Write-Host "WARNING: This will create/modify Azure resources" -ForegroundColor Yellow
+            $confirmation = Read-Host "Type 'yes' to confirm deployment"
+            if ($confirmation -ne "yes") {
+                Write-Host "Deployment cancelled" -ForegroundColor Yellow
+                exit 0
             }
         }
+
+        Write-Host "Applying infrastructure changes..." -ForegroundColor Cyan
+        Write-Host "This may take 15-30 minutes (APIM deployment is slow)..." -ForegroundColor Cyan
+        Invoke-TerraformApplyWithRetry -SuccessMessage "Deployment applied successfully"
     }
     "all" {
         Write-Title "Full Terraform Deployment"
-        
+
         # Init
         Write-Info "Step 1/4: Initializing..."
         terraform init `
             -backend-config="storage_account_name=$TfStateStorageAccount" `
             -reconfigure
         if ($LASTEXITCODE -ne 0) { exit 1 }
-        
+
         # Validate
         Write-Info "Step 2/4: Validating..."
         terraform validate
         if ($LASTEXITCODE -ne 0) { exit 1 }
-        
+
+        # Import any resources that exist in Azure but are absent from state
+        Write-Info "Step 2.5/4: Checking for state drift (importing orphaned resources)..."
+        Import-ExistingResources -SubscriptionId $subscriptionId -Environment $Environment
+
         # Plan
         Write-Info "Step 3/4: Planning..."
         terraform plan -out=tfplan
         if ($LASTEXITCODE -ne 0) { exit 1 }
-        
-        # Apply with retries
-        Write-Warning "Step 4/4: Applying infrastructure changes..."
-        Write-Host "This may take 15-30 minutes (APIM deployment is slow)..." -ForegroundColor Cyan
-        
-        $maxRetries = 3
-        $retryCount = 0
-        $applySuccess = $false
-        
-        while ($retryCount -lt $maxRetries -and -not $applySuccess) {
-            $retryCount++
-            Write-Host ""
-            Write-Host "Applying... (Attempt $retryCount of $maxRetries)" -ForegroundColor Yellow
-            
-            terraform apply tfplan
-            if ($LASTEXITCODE -eq 0) {
-                $applySuccess = $true
-                Write-Success "Full deployment completed successfully"
-                terraform output
-            } else {
-                if ($retryCount -lt $maxRetries) {
-                    Write-Host "Deployment attempt $retryCount failed. Waiting 30 seconds before retry..." -ForegroundColor Yellow
-                    Start-Sleep -Seconds 30
-                } else {
-                    Write-Error "Deployment failed after $maxRetries attempts"
-                    exit 1
-                }
+
+        # Confirm before apply (unless -AutoApprove)
+        if (-not $AutoApprove) {
+            Write-Host "WARNING: Step 4/4 will apply infrastructure changes" -ForegroundColor Yellow
+            $confirmation = Read-Host "Type 'yes' to confirm deployment"
+            if ($confirmation -ne "yes") {
+                Write-Host "Deployment cancelled" -ForegroundColor Yellow
+                exit 0
             }
+        }
+
+        Write-Info "Step 4/4: Applying..."
+        Write-Host "This may take 15-30 minutes (APIM deployment is slow)..." -ForegroundColor Cyan
+        Invoke-TerraformApplyWithRetry -SuccessMessage "Full deployment completed successfully"
+    }
+    "destroy" {
+        Write-Title "Destroying Resources"
+        terraform init `
+            -backend-config="storage_account_name=$TfStateStorageAccount" `
+            -reconfigure
+        if ($LASTEXITCODE -ne 0) { exit 1 }
+
+        Write-Host "WARNING: All resources created by Terraform will be permanently deleted!" -ForegroundColor Red
+        $confirmation = Read-Host "Type 'yes' to confirm resource deletion"
+        if ($confirmation -ne "yes") {
+            Write-Host "Destruction cancelled" -ForegroundColor Yellow
+            exit 0
+        }
+
+        Write-Info "Destroying infrastructure..."
+        terraform destroy -auto-approve
+        if ($LASTEXITCODE -eq 0) {
+            Write-Success "Resources destroyed successfully"
+        } else {
+            Write-Host "Destruction failed" -ForegroundColor Red
+            exit 1
         }
     }
     "output" {
@@ -570,14 +411,14 @@ switch ($Action.ToLower()) {
         if ($LASTEXITCODE -eq 0) {
             Write-Success "Code formatted"
         } else {
-            Write-Error "Code formatting failed"
+            Write-Host "Code formatting failed" -ForegroundColor Red
             exit 1
         }
     }
     "clean" {
         Write-Title "Cleaning Local State"
-        Write-Warning "This will remove local Terraform files!"
-        
+        Write-Host "WARNING: This will remove local Terraform files!" -ForegroundColor Yellow
+
         $confirmation = Read-Host "Type 'yes' to confirm"
         if ($confirmation -eq "yes") {
             Write-Info "Removing Terraform state files and cache..."
@@ -591,9 +432,13 @@ switch ($Action.ToLower()) {
         }
     }
     default {
-        Write-Error "Unknown action: $Action"
+        Write-Host "Unknown action: $Action" -ForegroundColor Red
         exit 1
     }
+}
+
+} finally {
+    Pop-Location
 }
 
 Write-Success "Action '$Action' completed successfully"

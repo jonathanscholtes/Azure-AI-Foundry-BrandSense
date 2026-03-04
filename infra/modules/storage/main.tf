@@ -25,14 +25,6 @@ resource "azurerm_storage_container" "containers" {
   container_access_type = "private"
 }
 
-resource "azurerm_role_assignment" "blob_contributor" {
-  scope                = azurerm_storage_account.main.id
-  role_definition_name = "Storage Blob Data Contributor"
-  principal_id         = var.identity_principal_id
-
-  depends_on = [azurerm_storage_account.main]
-}
-
 resource "azurerm_role_assignment" "table_contributor" {
   scope                = azurerm_storage_account.main.id
   role_definition_name = "Storage Table Data Contributor"

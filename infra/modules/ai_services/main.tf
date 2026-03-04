@@ -41,8 +41,6 @@ resource "azapi_resource" "ai_account" {
       "SecurityControl" = "ignore"
     }
   }
-
-  depends_on = []
 }
 
 resource "azapi_resource" "gpt41_deployment" {
@@ -112,6 +110,31 @@ resource "azapi_resource" "ai_project" {
   ]
 }
 
+# Register the AI Search service as a connection inside the Foundry project.
+# This replaces the 'az ml connection create' approach (which targets ML workspaces,
+# not Cognitive Services projects).
+resource "azapi_resource" "search_connection" {
+  type      = "Microsoft.CognitiveServices/accounts/projects/connections@2025-06-01"
+  name      = "brandsense-search"
+  parent_id = azapi_resource.ai_project.id
+
+  body = {
+    properties = {
+      category      = "CognitiveSearch"
+      target        = "${var.search_service_endpoint}/"
+      authType      = "AAD"
+      isSharedToAll = true
+      metadata = {
+        ApiType    = "Azure"
+        ResourceId = var.search_service_id
+      }
+    }
+  }
+
+  depends_on = [azapi_resource.ai_project]
+}
+
+# Cognitive Services OpenAI User – allows inference calls
 resource "azurerm_role_assignment" "openai_user" {
   scope                = azapi_resource.ai_account.id
   role_definition_name = "Cognitive Services OpenAI User"
@@ -120,10 +143,38 @@ resource "azurerm_role_assignment" "openai_user" {
   depends_on = [azapi_resource.ai_account]
 }
 
+# Cognitive Services OpenAI Contributor – needed to manage deployments/agents
+resource "azurerm_role_assignment" "openai_contributor" {
+  scope            = azapi_resource.ai_account.id
+  role_definition_id = "/subscriptions/${var.subscription_id}/providers/Microsoft.Authorization/roleDefinitions/a001fd3d-188f-4b5d-821b-7da978bf7442"
+  principal_id     = var.identity_principal_id
+
+  depends_on = [azapi_resource.ai_account]
+}
+
+# Cognitive Services User – general data-plane access
 resource "azurerm_role_assignment" "cognitive_services_user" {
   scope                = azapi_resource.ai_account.id
   role_definition_name = "Cognitive Services User"
   principal_id         = var.identity_principal_id
+
+  depends_on = [azapi_resource.ai_account]
+}
+
+# AI User – required for Foundry agent invoke/read operations
+resource "azurerm_role_assignment" "ai_user" {
+  scope            = azapi_resource.ai_account.id
+  role_definition_id = "/subscriptions/${var.subscription_id}/providers/Microsoft.Authorization/roleDefinitions/53ca6127-db72-4b80-b1b0-d745d6d5456d"
+  principal_id     = var.identity_principal_id
+
+  depends_on = [azapi_resource.ai_account]
+}
+
+# AI Project Management – required to create/manage agents in the Foundry project
+resource "azurerm_role_assignment" "ai_project_management" {
+  scope            = azapi_resource.ai_account.id
+  role_definition_id = "/subscriptions/${var.subscription_id}/providers/Microsoft.Authorization/roleDefinitions/eadc314b-1a2d-4efa-be10-5d325db5065e"
+  principal_id     = var.identity_principal_id
 
   depends_on = [azapi_resource.ai_account]
 }

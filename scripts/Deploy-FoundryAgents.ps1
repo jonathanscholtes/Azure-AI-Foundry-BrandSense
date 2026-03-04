@@ -1,35 +1,3 @@
-<#
-.SYNOPSIS
-    Deploy BrandSense Foundry agents.
-
-.DESCRIPTION
-    Wraps the Python agent provisioning script (scripts/deploy_foundry_agents.py).
-    Creates or updates the three BrandSense agents in the Foundry project and
-    writes their IDs to Key Vault.
-
-.PARAMETER AiProjectEndpoint
-    Azure AI Foundry project endpoint.
-    e.g. https://<account>.services.ai.azure.com/api/projects/<project>
-
-.PARAMETER KeyVaultName
-    Name of the Azure Key Vault where agent IDs are stored.
-
-.PARAMETER ModelDeployment
-    Foundry model deployment name. Defaults to gpt-4.1
-
-.PARAMETER SearchConnectionName
-    Name of the Azure AI Search connection registered in the Foundry project
-    (created by deploy.ps1 Phase 2.5 via 'az ml connection create').
-    Defaults to 'brandsense-search'. The Python script resolves this name
-    to a resource ID via the SDK; if not found it auto-discovers the first
-    AI Search connection in the project.
-
-.EXAMPLE
-    .\scripts\Deploy-FoundryAgents.ps1 `
-        -AiProjectEndpoint "https://myaccount.services.ai.azure.com/api/projects/myproject" `
-        -KeyVaultName      "kv-brandsense-prod"
-#>
-
 param (
     [Parameter(Mandatory = $true)]
     [string]$AiProjectEndpoint,
@@ -55,7 +23,7 @@ try {
     $pythonVersion = python --version 2>&1
     Write-Host "Python found: $pythonVersion" -ForegroundColor Green
 } catch {
-    Write-Host "Python not found — cannot deploy agents." -ForegroundColor Red
+    Write-Host "Python not found - cannot deploy agents." -ForegroundColor Red
     throw "Python is required for agent deployment."
 }
 

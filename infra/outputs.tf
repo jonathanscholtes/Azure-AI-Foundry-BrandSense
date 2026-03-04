@@ -152,6 +152,16 @@ output "container_app_name" {
   value       = module.container_apps.name
 }
 
+output "container_app_ui_url" {
+  description = "HTTPS URL of the BrandSense UI Container App"
+  value       = module.container_apps_ui.url
+}
+
+output "container_app_ui_name" {
+  description = "Name of the BrandSense UI Container App"
+  value       = module.container_apps_ui.name
+}
+
 # Monitoring Outputs
 output "app_insights_id" {
   description = "ID of Application Insights"

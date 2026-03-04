@@ -12,7 +12,9 @@ on:
 env:
   ACR_LOGIN_SERVER: acrbrnd.azurecr.io   # matches infra/variables.tf default
   TF_STATE_RG: rg-tfstate-brnd
-  TF_STATE_STORAGE: stotfstatebrnd
+  # Storage account name = stotfbrnd + first 8 hex chars of subscription ID.
+  # Must match the value deploy.ps1 derives automatically.
+  # Override by setting AZURE_TF_STATE_STORAGE as a repo variable if needed.
 
 jobs:
   # ---------------------------------------------------------------------------
@@ -70,20 +72,39 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
       - name: Bootstrap Terraform state backend
         run: |
+          # Derive storage account name the same way deploy.ps1 does:
+          # 'stotfbrnd' + first 8 hex chars of subscription ID
+          SUB_ID=$(az account show --query id -o tsv)
+          SUFFIX=${SUB_ID//-/}
+          TF_STATE_STORAGE="stotfbrnd${SUFFIX:0:8}"
+          echo "TF_STATE_STORAGE=$TF_STATE_STORAGE" >> $GITHUB_ENV
+
           az group create \
             --name ${{ env.TF_STATE_RG }} \
             --location eastus2 \
             --output none || true
           az storage account create \
-            --name ${{ env.TF_STATE_STORAGE }} \
+            --name "$TF_STATE_STORAGE" \
             --resource-group ${{ env.TF_STATE_RG }} \
             --sku Standard_LRS \
             --allow-blob-public-access false \
             --min-tls-version TLS1_2 \
             --output none || true
+
+          STORAGE_ID=$(az storage account show --name "$TF_STATE_STORAGE" \
+            --resource-group ${{ env.TF_STATE_RG }} --query id -o tsv)
+          SP_ID=$(az ad sp show --id ${{ secrets.AZURE_CLIENT_ID }} --query id -o tsv 2>/dev/null || true)
+          if [ -n "$SP_ID" ]; then
+            az role assignment create \
+              --assignee "$SP_ID" \
+              --role "Storage Blob Data Contributor" \
+              --scope "$STORAGE_ID" \
+              --output none 2>/dev/null || true
+          fi
+
           az storage container create \
             --name tfstate \
-            --account-name ${{ env.TF_STATE_STORAGE }} \
+            --account-name "$TF_STATE_STORAGE" \
             --auth-mode login \
             --output none || true
       - name: Terraform init

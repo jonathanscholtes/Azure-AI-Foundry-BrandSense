@@ -1,4 +1,4 @@
-# Common deployment functions for Contract Risk MCP Platform
+# Common deployment functions for BrandSense Platform
 # This module contains shared utilities used across deployment scripts
 
 # Helper functions for formatted output
@@ -119,6 +119,25 @@ function Get-RandomAlphaNumeric {
     return $randomString
 }
 
+function Get-ResourceToken {
+    <#
+    .SYNOPSIS
+        Returns a deterministic 8-character token derived from the subscription ID.
+    .DESCRIPTION
+        Seeds the MD5-based Get-RandomAlphaNumeric function with the subscription ID
+        so the token is stable across re-runs for a given subscription but unique
+        enough across subscriptions to avoid Azure naming collisions.
+    #>
+    param (
+        [Parameter(Mandatory=$true)]
+        [string]$SubscriptionId,
+
+        [int]$Length = 8
+    )
+
+    return Get-RandomAlphaNumeric -Length $Length -Seed $SubscriptionId
+}
+
 function New-SecurePassword {
     param (
         [int]$Length = 16
@@ -148,97 +167,6 @@ function New-SecurePassword {
     # Shuffle the password to avoid predictable pattern
     $shuffled = $password | Get-Random -Count $password.Count
     return -join $shuffled
-}
-
-function Invoke-HelmWithRetry {
-    param (
-        [string]$CommandDescription,
-        [scriptblock]$Command,
-        [int]$MaxRetries = 3,
-        [int]$DelaySeconds = 10
-    )
-    
-    for ($i = 1; $i -le $MaxRetries; $i++) {
-        try {
-            Write-Host "Attempt $i of $MaxRetries..." -ForegroundColor Gray
-            
-            # Execute the command directly (no buffering)
-            & $Command
-            
-            if ($LASTEXITCODE -eq 0) {
-                Write-Host "[OK] $CommandDescription completed successfully" -ForegroundColor Green
-                return $true
-            }
-            
-            Write-Host "Command exited with code $LASTEXITCODE" -ForegroundColor Yellow
-        }
-        catch {
-            Write-Host "Error: $_" -ForegroundColor Yellow
-        }
-        
-        if ($i -lt $MaxRetries) {
-            Write-Host "Retrying in $DelaySeconds seconds..." -ForegroundColor Yellow
-            Start-Sleep -Seconds $DelaySeconds
-        }
-    }
-    
-    Write-Host "[X] $CommandDescription failed after $MaxRetries attempts" -ForegroundColor Red
-    return $false
-}
-
-function Get-ServiceExternalIP {
-    param (
-        [string]$ServiceName,
-        [string]$Namespace = "tools",
-        [int]$MaxWaitSeconds = 180
-    )
-    
-    $waited = 0
-    while ($waited -lt $MaxWaitSeconds) {
-        $externalIP = (kubectl get svc $ServiceName -n $Namespace -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>$null)
-        if (![string]::IsNullOrWhiteSpace($externalIP) -and $externalIP -ne "<pending>") {
-            return $externalIP.Trim()
-        }
-        Start-Sleep -Seconds 10
-        $waited += 10
-        Write-Host "  Waiting for $ServiceName IP... (${waited}/${MaxWaitSeconds} seconds)" -ForegroundColor Gray
-    }
-    return $null
-}
-
-function New-FederatedIdentityCredential {
-    param (
-        [string]$ServiceAccountName,
-        [string]$Namespace = "tools",
-        [string]$ManagedIdentityName,
-        [string]$ResourceGroupName,
-        [string]$OidcIssuer
-    )
-    
-    $credentialName = "${ServiceAccountName}-federated-id"
-    $subject = "system:serviceaccount:${Namespace}:${ServiceAccountName}"
-    
-    $existingCred = az identity federated-credential show `
-        --name $credentialName `
-        --identity-name $ManagedIdentityName `
-        --resource-group $ResourceGroupName `
-        --output none `
-        2>$null
-    
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "Creating federated identity credential for $ServiceAccountName..." -ForegroundColor Yellow
-        az identity federated-credential create `
-            --name $credentialName `
-            --identity-name $ManagedIdentityName `
-            --resource-group $ResourceGroupName `
-            --issuer $OidcIssuer `
-            --subject $subject `
-            --audience "api://AzureADTokenExchange" `
-            --output none
-        Write-Host "Federated identity credential created for $ServiceAccountName" -ForegroundColor Green
-    } else {
-        Write-Host "Federated identity credential already exists for $ServiceAccountName" -ForegroundColor Green
-    }
 }
 
 function Set-KeyVaultSecret {
@@ -274,10 +202,9 @@ Export-ModuleMember -Function @(
     'Write-Success',
     'Write-Info',
     'Initialize-AzureContext',
+    'Test-RequiredTools',
     'Get-RandomAlphaNumeric',
+    'Get-ResourceToken',
     'New-SecurePassword',
-    'Invoke-HelmWithRetry',
-    'Get-ServiceExternalIP',
-    'New-FederatedIdentityCredential',
     'Set-KeyVaultSecret'
 )

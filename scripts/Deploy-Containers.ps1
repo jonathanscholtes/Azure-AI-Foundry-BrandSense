@@ -65,9 +65,9 @@ foreach ($imageName in $Images) {
         'acr', 'build',
         '--resource-group', $ResourceGroupName,
         '--registry',       $ContainerRegistryName,
-        '--file',           $config.dockerfile,
+        '--file',           "`"$($config.dockerfile)`"",
         '--image',          $imageRef,
-        $config.context
+        "`"$($config.context)`""
     )
 
     # Start-Process keeps the real console handle (avoids cp1252 errors from az CLI)

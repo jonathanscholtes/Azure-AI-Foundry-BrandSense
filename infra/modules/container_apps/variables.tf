@@ -8,8 +8,8 @@ variable "container_app_image" {
   type        = string
 }
 
-variable "location" {
-  description = "Azure region"
+variable "container_app_environment_id" {
+  description = "Resource ID of the shared Container Apps Environment"
   type        = string
 }
 
@@ -31,6 +31,12 @@ variable "managed_identity_client_id" {
 variable "container_registry_server" {
   description = "Login server of the Azure Container Registry"
   type        = string
+}
+
+variable "extra_env_vars" {
+  description = "Additional environment variables to inject into the container (key = name, value = value)"
+  type        = map(string)
+  default     = {}
 }
 
 variable "tags" {

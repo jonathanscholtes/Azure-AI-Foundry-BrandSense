@@ -44,3 +44,13 @@ variable "embedding_capacity" {
   type        = number
   default     = 120
 }
+
+variable "search_service_endpoint" {
+  description = "Endpoint of the AI Search service for the Foundry project connection"
+  type        = string
+}
+
+variable "search_service_id" {
+  description = "Resource ID of the AI Search service for connection metadata"
+  type        = string
+}

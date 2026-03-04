@@ -70,7 +70,7 @@ variable "ai_services_deployment_gpt41_capacity" {
 variable "ai_services_deployment_embedding_capacity" {
   description = "Capacity for text-embedding-ada-002 deployment"
   type        = number
-  default     = 120
+  default     = 100
 }
 
 # AI Search Variables
@@ -174,9 +174,21 @@ variable "container_app_name" {
 }
 
 variable "container_app_image" {
-  description = "Container image to deploy (ACR image URI with tag)"
+  description = "Container image to deploy. Defaults to a public placeholder used on first deploy; Phase 1.5 updates the app with the real ACR image."
   type        = string
-  default     = "acrbrnd.azurecr.io/brnd-api:latest"
+  default     = "mcr.microsoft.com/azuredocs/containerapps-helloworld:latest"
+}
+
+variable "container_app_ui_name" {
+  description = "Name of the Container App hosting the BrandSense UI"
+  type        = string
+  default     = "brnd-ui"
+}
+
+variable "container_app_ui_image" {
+  description = "Container image for the UI. Defaults to a public placeholder used on first deploy; Phase 1.5 updates the app with the real ACR image."
+  type        = string
+  default     = "mcr.microsoft.com/azuredocs/containerapps-helloworld:latest"
 }
 
 # Tagging

@@ -18,3 +18,8 @@ output "app_id" {
   description = "App ID of Application Insights"
   value       = azurerm_application_insights.ai_foundry.app_id
 }
+
+output "log_analytics_workspace_id" {
+  description = "ID of the Log Analytics workspace"
+  value       = azurerm_log_analytics_workspace.main.id
+}

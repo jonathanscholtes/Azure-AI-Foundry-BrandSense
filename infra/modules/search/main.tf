@@ -1,8 +1,9 @@
 resource "azurerm_search_service" "main" {
-  name                = var.search_service_name
-  resource_group_name = var.resource_group_name
-  location            = var.location
-  sku                 = var.search_sku
+  name                          = var.search_service_name
+  resource_group_name           = var.resource_group_name
+  location                      = var.location
+  sku                           = var.search_sku
+  local_authentication_enabled  = false
 
   tags = merge(
     var.tags,
@@ -10,8 +11,6 @@ resource "azurerm_search_service" "main" {
       Name = var.search_service_name
     }
   )
-
-  depends_on = []
 }
 
 resource "azurerm_role_assignment" "search_service_contributor" {

@@ -25,13 +25,15 @@ container_registry_name = "acrbrnd${ResourceToken}"
 key_vault_name          = "kv-brnd-${ResourceToken}"
 
 # Container Apps
-container_app_name  = "brnd-api"
-container_app_image = "acrbrnd${ResourceToken}.azurecr.io/brnd-api:latest"
+# Placeholder images are used on first deploy; Phase 1.5 updates to real ACR images.
+container_app_name     = "brnd-api"
+container_app_image    = "mcr.microsoft.com/azuredocs/containerapps-helloworld:latest"
+container_app_ui_name  = "brnd-ui"
+container_app_ui_image = "mcr.microsoft.com/azuredocs/containerapps-helloworld:latest"
 
 # Tags
 tags = {
   Environment = "${Environment}"
   Project     = "BrandSense"
   ManagedBy   = "Terraform"
-  CreatedAt   = "${Timestamp}"
 }
