@@ -31,7 +31,8 @@ try {
 # 2. Install Python dependencies
 # ---------------------------------------------------------------------------
 Write-Host "`nInstalling Python dependencies..." -ForegroundColor Yellow
-pip install -r "$PSScriptRoot\requirements-agents.txt" --quiet
+$repoRoot = Split-Path $PSScriptRoot -Parent
+pip install -r "$repoRoot\agents\requirements.txt" --quiet
 if ($LASTEXITCODE -ne 0) { throw "pip install failed." }
 
 # ---------------------------------------------------------------------------
@@ -50,7 +51,7 @@ Write-Host "  Search Connection  : $SearchConnectionName"  -ForegroundColor Whit
 Write-Host "`nProvisioning agents in Microsoft Foundry..." -ForegroundColor Yellow
 
 $pythonArgs = @(
-    "$PSScriptRoot\deploy_foundry_agents.py",
+    "$repoRoot\agents\deploy.py",
     "--project-endpoint", $AiProjectEndpoint,
     "--model-deployment", $ModelDeployment,
     "--key-vault-name",   $KeyVaultName,

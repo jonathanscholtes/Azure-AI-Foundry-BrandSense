@@ -44,7 +44,16 @@ jobs:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-      - run: terraform init
+      - name: Derive TF state storage name
+        run: |
+          SUB_ID=$(az account show --query id -o tsv)
+          SUFFIX=${SUB_ID//-/}
+          echo "TF_STATE_STORAGE=stotfbrnd${SUFFIX:0:8}" >> $GITHUB_ENV
+      - name: Terraform init
         working-directory: infra
-      - run: terraform plan
+        run: |
+          terraform init \
+            -backend-config="storage_account_name=${{ env.TF_STATE_STORAGE }}"
+      - name: Terraform plan
         working-directory: infra
+        run: terraform plan

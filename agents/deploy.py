@@ -1,17 +1,17 @@
-﻿"""
+"""
 Deploy BrandSense Foundry Agents.
 
 Creates or updates the three BrandSense agents in the Microsoft Foundry project
 and writes their IDs to Azure Key Vault so the brandsense-api can discover them.
 
-Agents:
-  - brandsense-researcher  : queries the brandsense-guidelines AI Search index
-  - brandsense-auditor     : analyses the PDF asset against retrieved guidelines
-                             (APIM MCP tool for PyMuPDF is added manually in the portal)
-  - brandsense-briefer     : synthesises audit results into a creative brief
+Agents are defined as individual modules under the ``agents`` package:
+  - agents.researcher  : queries the brandsense-guidelines AI Search index
+  - agents.auditor     : analyses the PDF asset against retrieved guidelines
+                         (APIM MCP tool for PyMuPDF is added manually in the portal)
+  - agents.briefer     : synthesises audit results into a creative brief
 
 Usage:
-    python scripts/deploy_foundry_agents.py \\
+    python agents/deploy.py \\
         --project-endpoint <FOUNDRY_PROJECT_ENDPOINT> \\
         --model-deployment gpt-4.1 \\
         --key-vault-name   <KEY_VAULT_NAME> \\
@@ -28,146 +28,20 @@ import sys
 from typing import Optional
 
 from azure.ai.projects import AIProjectClient
-from azure.ai.projects.models import (
-    AzureAISearchTool,
-    PromptAgentDefinition,
-)
+from azure.ai.projects.models import AzureAISearchAgentTool
 from azure.identity import DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient
+
+from agents import researcher, auditor, briefer
 
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
-# Key Vault secret names — brandsense-api reads these at startup
-KV_SECRET_RESEARCHER = "brandsense-researcher-agent-id"
-KV_SECRET_AUDITOR    = "brandsense-auditor-agent-id"
-KV_SECRET_BRIEFER    = "brandsense-briefer-agent-id"
+# Ordered list of agent modules to deploy
+AGENT_MODULES = [researcher, auditor, briefer]
 
-# Default Foundry connection name created by deploy.ps1 Phase 2.5
+# Default Foundry connection name created by Terraform
 DEFAULT_SEARCH_CONNECTION_NAME = "brandsense-search"
-
-
-# ---------------------------------------------------------------------------
-# Agent system prompts
-# ---------------------------------------------------------------------------
-
-RESEARCHER_INSTRUCTIONS = """
-You are the BrandSense Marketing Researcher.
-
-Your sole responsibility is to retrieve the brand, legal, and SEO guidelines
-that are relevant to the marketing asset under review.
-
-## Tools
-- AzureAISearch: query the `brandsense-guidelines` index.
-
-## Behaviour
-1. Receive a short description of the asset (file name, asset type, target market).
-2. Run three searches against the guidelines index:
-   - category:"brand"  â€” retrieve all brand rules
-   - category:"legal"  â€” retrieve all legal requirements
-   - category:"seo"    â€” retrieve all SEO rules
-3. Return the retrieved guidelines as a structured JSON object with three keys:
-   `brand`, `legal`, `seo` â€” each containing an array of guideline objects.
-
-## Output format
-```json
-{
-  "brand": [ { "id": "...", "rule": "...", "value": "...", "description": "..." } ],
-  "legal": [ { "id": "...", "rule": "...", "value": "...", "jurisdiction": "...", "description": "..." } ],
-  "seo":   [ { "id": "...", "rule": "...", "value": "...", "dimension": "...",   "description": "..." } ]
-}
-```
-
-## Rules
-- Do not fabricate guidelines. Only return what the search index returns.
-- Do not perform any audit or analysis â€” that is the Auditor's job.
-- If the search returns no results for a category, return an empty array for that key.
-"""
-
-AUDITOR_INSTRUCTIONS = """
-You are the BrandSense Marketing Auditor.
-
-You receive:
-1. The full text content of a marketing asset (extracted from PDF).
-2. Font and colour metadata extracted by the PyMuPDF tool via APIM.
-3. The structured guidelines retrieved by the Researcher agent.
-
-Your job is to audit the asset against every guideline and produce a structured
-list of pass/fail checks.
-
-## Behaviour
-1. For each guideline in `brand`, `legal`, and `seo`:
-   a. Evaluate whether the asset content / metadata complies.
-   b. Record a check with: rule_id, category, pass_fail (bool), severity
-      ("error" | "warning"), message, evidence (quoted excerpt or metric),
-      and recommendation (if failed).
-2. Compute summary counts: error_count, warning_count, overall_pass.
-
-## Output format
-```json
-{
-  "checks": [
-    {
-      "rule_id": "brand-001",
-      "category": "brand",
-      "pass_fail": false,
-      "severity": "error",
-      "message": "Primary blue #0078D4 not found in document colours.",
-      "evidence": "Colours found: #FF5733, #FFFFFF",
-      "recommendation": "Replace headline colour with #0078D4."
-    }
-  ],
-  "error_count": 1,
-  "warning_count": 0,
-  "overall_pass": false
-}
-```
-
-## Rules
-- Be specific. Quote evidence from the asset or metadata.
-- Do not invent colour or font values â€” only use what is provided in the metadata.
-- If a guideline is not applicable to this asset type, mark it as pass with a
-  note in the message field.
-- severity "error" = blocking issue; "warning" = recommended fix.
-"""
-
-BRIEFER_INSTRUCTIONS = """
-You are the BrandSense Marketing Briefer.
-
-You receive the full audit result produced by the Auditor agent.
-
-Your job is to synthesise the failed checks into a clear, actionable creative brief
-that a marketing team can hand directly to a designer or copywriter.
-
-## Behaviour
-1. Group failed checks by theme (e.g., colour, typography, legal, tone of voice).
-2. For each theme write a brief section with:
-   - section: theme name
-   - content: plain-English description of what needs to change and why
-   - priority: "high" (errors) | "medium" (warnings)
-3. Add an overall summary sentence.
-
-## Output format
-```json
-{
-  "summary": "The asset requires 3 corrections before it can be published.",
-  "brief": [
-    {
-      "section": "Colour",
-      "content": "Replace the headline colour (#FF5733) with the primary brand blue (#0078D4). Red is only permitted for error states in product UI.",
-      "priority": "high"
-    }
-  ]
-}
-```
-
-## Rules
-- Only include sections where there are actual failures.
-- Write for a non-technical audience â€” avoid jargon.
-- If overall_pass is true, return a brief with a single section confirming
-  the asset is compliant and ready to publish.
-- Do not repeat the raw rule IDs in the brief â€” translate them into plain language.
-"""
 
 
 # ---------------------------------------------------------------------------
@@ -221,7 +95,7 @@ class AgentDeployer:
                 return conn.id
             except Exception:
                 logger.warning(
-                    "Connection '%s' not found — attempting auto-discover.",
+                    "Connection '%s' not found - attempting auto-discover.",
                     self.search_connection_name,
                 )
 
@@ -240,7 +114,7 @@ class AgentDeployer:
         logger.warning(
             "No AI Search connection found in the Foundry project. "
             "Researcher and Auditor will be deployed WITHOUT the AI Search tool. "
-            "Create the connection with 'az ml connection create' then re-run."
+            "Create the connection in the Foundry portal then re-run."
         )
         return None
 
@@ -248,7 +122,7 @@ class AgentDeployer:
         if not self.search_connection_id:
             return []
         return [
-            AzureAISearchTool(
+            AzureAISearchAgentTool(
                 index_connection_id=self.search_connection_id,
                 index_name="brandsense-guidelines",
             )
@@ -291,7 +165,7 @@ class AgentDeployer:
 
     def deploy_all(self) -> dict:
         logger.info("=" * 60)
-        logger.info("BrandSense — deploying Foundry agents")
+        logger.info("BrandSense - deploying Foundry agents")
         logger.info("  Project    : %s", self.project_endpoint)
         logger.info("  Model      : %s", self.model_deployment)
         logger.info("  KV         : %s", self.key_vault_name)
@@ -304,32 +178,20 @@ class AgentDeployer:
         results = {}
 
         try:
-            results["researcher"] = self._create_or_update(
-                "brandsense-researcher",
-                RESEARCHER_INSTRUCTIONS,
-                search_tools,
-            )
-            results["auditor"] = self._create_or_update(
-                "brandsense-auditor",
-                AUDITOR_INSTRUCTIONS,
-                search_tools,  # APIM MCP tool added manually in Foundry portal
-            )
-            results["briefer"] = self._create_or_update(
-                "brandsense-briefer",
-                BRIEFER_INSTRUCTIONS,
-                [],  # no tools â€” synthesis only
-            )
-
-            # Persist IDs to Key Vault
-            self._write_kv_secret(KV_SECRET_RESEARCHER, results["researcher"])
-            self._write_kv_secret(KV_SECRET_AUDITOR,    results["auditor"])
-            self._write_kv_secret(KV_SECRET_BRIEFER,    results["briefer"])
+            for agent_mod in AGENT_MODULES:
+                tools = search_tools if agent_mod.USES_SEARCH else []
+                agent_id = self._create_or_update(
+                    agent_mod.NAME,
+                    agent_mod.INSTRUCTIONS,
+                    tools,
+                )
+                results[agent_mod.NAME] = agent_id
+                self._write_kv_secret(agent_mod.KV_SECRET, agent_id)
 
             logger.info("=" * 60)
             logger.info("[OK] All agents deployed.")
-            logger.info("  brandsense-researcher : %s", results["researcher"])
-            logger.info("  brandsense-auditor    : %s", results["auditor"])
-            logger.info("  brandsense-briefer    : %s", results["briefer"])
+            for name, aid in results.items():
+                logger.info("  %-35s : %s", name, aid)
             logger.info("=" * 60)
             logger.info(
                 "Next: add the APIM MCP Server connection to "
