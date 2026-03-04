@@ -31,6 +31,9 @@ container_app_image    = "mcr.microsoft.com/azuredocs/containerapps-helloworld:l
 container_app_ui_name  = "brnd-ui"
 container_app_ui_image = "mcr.microsoft.com/azuredocs/containerapps-helloworld:latest"
 
+# GitHub Actions SP (populated by New-GitHubOidc.ps1; leave empty to skip)
+github_sp_object_id = "${GitHubSpObjectId}"
+
 # Tags
 tags = {
   Environment = "${Environment}"

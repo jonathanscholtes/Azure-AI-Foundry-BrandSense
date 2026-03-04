@@ -130,6 +130,46 @@ resource "azurerm_role_assignment" "current_user_ai_user" {
   principal_id       = data.azurerm_client_config.current.object_id
 }
 
+# Allow deploying user to write agent IDs to Key Vault during deployment
+resource "azurerm_role_assignment" "current_user_kv_secrets_officer" {
+  scope                = module.key_vault.id
+  role_definition_name = "Key Vault Secrets Officer"
+  principal_id         = data.azurerm_client_config.current.object_id
+}
+
+# ---------------------------------------------------------------------------
+# GitHub Actions service principal data-plane roles (optional)
+# These mirror the deploying-user roles above, but target the CI/CD SP so
+# that the deploy-agents, seed-guidelines, etc. workflow jobs succeed.
+# ---------------------------------------------------------------------------
+resource "azurerm_role_assignment" "github_sp_kv_secrets_officer" {
+  count                = var.github_sp_object_id != "" ? 1 : 0
+  scope                = module.key_vault.id
+  role_definition_name = "Key Vault Secrets Officer"
+  principal_id         = var.github_sp_object_id
+}
+
+resource "azurerm_role_assignment" "github_sp_search_index_contributor" {
+  count                = var.github_sp_object_id != "" ? 1 : 0
+  scope                = module.search.id
+  role_definition_name = "Search Index Data Contributor"
+  principal_id         = var.github_sp_object_id
+}
+
+resource "azurerm_role_assignment" "github_sp_ai_project_management" {
+  count              = var.github_sp_object_id != "" ? 1 : 0
+  scope              = module.ai_services.ai_account_id
+  role_definition_id = "/subscriptions/${data.azurerm_client_config.current.subscription_id}/providers/Microsoft.Authorization/roleDefinitions/eadc314b-1a2d-4efa-be10-5d325db5065e"
+  principal_id       = var.github_sp_object_id
+}
+
+resource "azurerm_role_assignment" "github_sp_ai_user" {
+  count              = var.github_sp_object_id != "" ? 1 : 0
+  scope              = module.ai_services.ai_account_id
+  role_definition_id = "/subscriptions/${data.azurerm_client_config.current.subscription_id}/providers/Microsoft.Authorization/roleDefinitions/53ca6127-db72-4b80-b1b0-d745d6d5456d"
+  principal_id       = var.github_sp_object_id
+}
+
 module "ai_services" {
   source = "./modules/ai_services"
 

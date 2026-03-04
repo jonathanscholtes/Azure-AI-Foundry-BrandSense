@@ -19,7 +19,12 @@ param (
     [string]$TfStateStorageAccount = "",
 
     [Parameter(Mandatory=$false)]
-    [switch]$AutoApprove
+    [switch]$AutoApprove,
+
+    # Object ID of the GitHub Actions service principal (from New-GitHubOidc.ps1).
+    # When set, Terraform grants this SP the data-plane roles needed by CI/CD.
+    [Parameter(Mandatory=$false)]
+    [string]$GitHubSpObjectId = ""
 )
 
 Set-StrictMode -Version Latest
@@ -87,6 +92,7 @@ function New-TerraformVarsFile {
         [string]$SubscriptionId,
         [string]$Location,
         [string]$Environment,
+        [string]$GitHubSpObjectId = "",
         [string]$OutputPath = "."
     )
     
@@ -120,6 +126,7 @@ function New-TerraformVarsFile {
         $content = $content -replace '\$\{Location\}', $Location
         $content = $content -replace '\$\{Environment\}', $Environment
         $content = $content -replace '\$\{ResourceToken\}', $resourceToken
+        $content = $content -replace '\$\{GitHubSpObjectId\}', $GitHubSpObjectId
         
         $tfvarsPath = Join-Path -Path $absolutePath -ChildPath "terraform.tfvars"
         Set-Content -Path $tfvarsPath -Value $content -Encoding UTF8 -Force -ErrorAction Stop
@@ -234,7 +241,13 @@ if (-not (Test-Prerequisites)) {
 
 # Authenticate and set subscription (idempotent; safe if parent already called)
 Initialize-AzureContext -Subscription $Subscription
-$subscriptionId = az account show --query id -o tsv
+$subscriptionId = az account show --query id       -o tsv
+$tenantId       = az account show --query tenantId -o tsv
+
+# Expose ARM_TENANT_ID and ARM_SUBSCRIPTION_ID so the azurerm backend's
+# AzureCli authorizer can resolve the tenant without prompting for login.
+$env:ARM_TENANT_ID       = $tenantId
+$env:ARM_SUBSCRIPTION_ID = $subscriptionId
 
 # Derive storage account name from subscription ID if not supplied
 if (-not $TfStateStorageAccount) {
@@ -257,7 +270,7 @@ try {
 # Generate terraform.tfvars for deployment actions
 if ($Action -in @("init", "plan", "apply", "all", "validate")) {
     Write-Info "Generating terraform.tfvars..."
-    if (-not (New-TerraformVarsFile -SubscriptionId $subscriptionId -Location $Location -Environment $Environment -OutputPath ".")) {
+    if (-not (New-TerraformVarsFile -SubscriptionId $subscriptionId -Location $Location -Environment $Environment -GitHubSpObjectId $GitHubSpObjectId -OutputPath ".")) {
         Write-Host "Failed to generate terraform.tfvars" -ForegroundColor Red
         exit 1
     }

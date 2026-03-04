@@ -85,19 +85,14 @@ az storage account create `
     --min-tls-version TLS1_2 `
     --output none
 
-az storage container create `
-    --name tfstate `
-    --account-name $TfStateStorageAccount `
-    --auth-mode login `
-    --output none
-
-# Assign Storage Blob Data Contributor to the current user so Terraform
-# can read/write state with use_azuread_auth = true  (idempotent).
-$currentUserId  = az ad signed-in-user show --query id -o tsv 2>$null
-$storageId      = az storage account show `
-                      --name $TfStateStorageAccount `
-                      --resource-group $TfStateResourceGroup `
-                      --query id -o tsv
+# Assign Storage Blob Data Contributor to the current user BEFORE creating the
+# container — subscription policy disables shared key access, so AAD data-plane
+# permission must exist first. (idempotent)
+$currentUserId = az ad signed-in-user show --query id -o tsv 2>$null
+$storageId     = az storage account show `
+                     --name $TfStateStorageAccount `
+                     --resource-group $TfStateResourceGroup `
+                     --query id -o tsv
 
 if ($currentUserId -and $storageId) {
     Write-Host "  Assigning Storage Blob Data Contributor to current user (idempotent)..." -ForegroundColor Cyan
@@ -115,9 +110,8 @@ if ($currentUserId -and $storageId) {
     $interval = 10
     $ready = $false
     while (-not $ready -and $waited -lt $maxWait) {
-        $testResult = az storage blob list `
+        $testResult = az storage container list `
             --account-name $TfStateStorageAccount `
-            --container-name tfstate `
             --auth-mode login `
             --output none 2>&1
         if ($LASTEXITCODE -eq 0) {
@@ -135,6 +129,12 @@ if ($currentUserId -and $storageId) {
     }
 }
 
+az storage container create `
+    --name tfstate `
+    --account-name $TfStateStorageAccount `
+    --auth-mode login `
+    --output none
+
 Write-Host "State backend ready." -ForegroundColor Green
 } # end -not SkipBootstrap
 
@@ -143,12 +143,24 @@ Write-Host "State backend ready." -ForegroundColor Green
 # ---------------------------------------------------------------------------
 Write-Host "`n=== PHASE 1: Infrastructure Deployment ===" -ForegroundColor Magenta
 
+# Resolve the GitHub Actions SP object ID (if the app registration exists) so
+# Terraform can grant it the required data-plane roles (KV, AI, Search).
+$githubSpObjectId = ""
+$ghApp = az ad app list --display-name "sp-brnd-github" --query "[0].appId" -o tsv 2>$null
+if ($ghApp) {
+    $githubSpObjectId = az ad sp show --id $ghApp --query id -o tsv 2>$null
+    if ($githubSpObjectId) {
+        Write-Host "  GitHub SP object ID: $githubSpObjectId" -ForegroundColor Gray
+    }
+}
+
 & "$PSScriptRoot\scripts\Deploy-Infrastructure.ps1" `
     -Action $Action `
     -Subscription $Subscription `
     -Location $Location `
     -Environment $Environment `
     -TfStateStorageAccount $TfStateStorageAccount `
+    -GitHubSpObjectId $githubSpObjectId `
     -AutoApprove
 
 if ($LASTEXITCODE -ne 0) {

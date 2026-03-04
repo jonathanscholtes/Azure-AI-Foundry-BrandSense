@@ -1,25 +1,3 @@
-<#
-.SYNOPSIS
-    One-time setup: creates an Entra app registration with a GitHub Actions
-    federated credential and sets the 3 required GitHub repository secrets.
-
-.DESCRIPTION
-    After running this script, GitHub Actions can authenticate to Azure via
-    OIDC with zero stored passwords. The three secrets it sets
-    (AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID) are the only
-    secrets this repository requires — all other values come from Terraform
-    outputs or hardcoded naming conventions in deploy.yml.
-
-.PREREQUISITES
-    - az CLI, logged in (az login)
-    - gh CLI, authenticated (gh auth login)
-    - Contributor rights on the target subscription
-
-.EXAMPLE
-    .\scripts\New-GitHubOidc.ps1 `
-        -Repo "jonathanscholtes/Azure-AI-Foundry-BrandSense" `
-        -AppName "sp-brnd-github"
-#>
 param (
     # GitHub repo in owner/name format. Defaults to the remote of the current git repo.
     [Parameter(Mandatory=$false)]
@@ -137,9 +115,8 @@ Write-Host "`nConfiguring federated credential for GitHub Actions..." -Foregroun
 $credName    = "github-actions-$($Branch -replace '[^a-zA-Z0-9]','-')"
 $credSubject = "repo:${Repo}:ref:refs/heads/${Branch}"
 
-$existing = az ad app federated-credential list --id $clientId |
-    ConvertFrom-Json |
-    Where-Object { $_.subject -eq $credSubject }
+$existingCreds = az ad app federated-credential list --id $clientId | ConvertFrom-Json
+$existing = @($existingCreds) | Where-Object { $_ -and ($_ | Get-Member -Name subject -ErrorAction SilentlyContinue) -and $_.subject -eq $credSubject }
 
 if ($existing) {
     Write-Host "  Federated credential already exists." -ForegroundColor Yellow
@@ -168,15 +145,24 @@ gh secret set AZURE_CLIENT_ID       --body $clientId       --repo $Repo
 gh secret set AZURE_TENANT_ID       --body $tenantId       --repo $Repo
 gh secret set AZURE_SUBSCRIPTION_ID --body $subscriptionId --repo $Repo
 
-Write-Host @"
+# Resolve the service principal object ID (needed by Terraform for data-plane
+# role assignments: KV Secrets Officer, AI Project Management, AI User, etc.)
+$spObjectId = az ad sp show --id $clientId --query id -o tsv 2>$null
+if ($spObjectId) {
+    gh secret set AZURE_SP_OBJECT_ID --body $spObjectId --repo $Repo
+    Write-Host "  AZURE_SP_OBJECT_ID  = $spObjectId" -ForegroundColor Cyan
+} else {
+    Write-Host "  WARNING: Could not resolve SP object ID - set AZURE_SP_OBJECT_ID manually." -ForegroundColor Yellow
+}
 
-============================================================
-  Done!  3 secrets written to $Repo
-
-  AZURE_CLIENT_ID       = $clientId
-  AZURE_TENANT_ID       = $tenantId
-  AZURE_SUBSCRIPTION_ID = $subscriptionId
-
-  Push to main to trigger the first deploy.
-============================================================
-"@ -ForegroundColor Green
+Write-Host ""
+Write-Host "============================================================" -ForegroundColor Green
+Write-Host "  Done!  Secrets written to $Repo"                            -ForegroundColor Green
+Write-Host ""                                                              -ForegroundColor Green
+Write-Host "  AZURE_CLIENT_ID       = $clientId"                          -ForegroundColor Green
+Write-Host "  AZURE_TENANT_ID       = $tenantId"                          -ForegroundColor Green
+Write-Host "  AZURE_SUBSCRIPTION_ID = $subscriptionId"                    -ForegroundColor Green
+Write-Host "  AZURE_SP_OBJECT_ID    = $spObjectId"                        -ForegroundColor Green
+Write-Host ""                                                              -ForegroundColor Green
+Write-Host "  Push to main to trigger the first deploy."                  -ForegroundColor Green
+Write-Host "============================================================" -ForegroundColor Green

@@ -9,7 +9,12 @@ param (
     [string]$ModelDeployment = "gpt-4.1",
 
     [Parameter(Mandatory = $false)]
-    [string]$SearchConnectionName = "brandsense-search"
+    [string]$SearchConnectionName = "brandsense-search",
+
+    # Deploy only the listed agents (e.g. "researcher", "auditor", "briefer").
+    # When empty, deploys all agents.
+    [Parameter(Mandatory = $false)]
+    [string[]]$Only = @()
 )
 
 $ErrorActionPreference = "Stop"
@@ -57,6 +62,11 @@ $pythonArgs = @(
     "--key-vault-name",   $KeyVaultName,
     "--search-connection-name", $SearchConnectionName
 )
+
+if ($Only.Count -gt 0) {
+    $pythonArgs += "--only"
+    $pythonArgs += $Only
+}
 
 python @pythonArgs
 

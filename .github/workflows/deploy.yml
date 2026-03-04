@@ -25,6 +25,9 @@ jobs:
       api:        ${{ steps.filter.outputs.api }}
       ui:         ${{ steps.filter.outputs.ui }}
       agents:     ${{ steps.filter.outputs.agents }}
+      agent_researcher: ${{ steps.filter.outputs.agent_researcher }}
+      agent_auditor:    ${{ steps.filter.outputs.agent_auditor }}
+      agent_briefer:    ${{ steps.filter.outputs.agent_briefer }}
       guidelines: ${{ steps.filter.outputs.guidelines }}
     steps:
       - uses: actions/checkout@v4
@@ -38,6 +41,12 @@ jobs:
               - 'apps/ui/**'
             agents:
               - 'agents/**'
+            agent_researcher:
+              - 'agents/researcher.py'
+            agent_auditor:
+              - 'agents/auditor.py'
+            agent_briefer:
+              - 'agents/briefer.py'
             guidelines:
               - 'scripts/load/data/**'
               - 'scripts/load/guidelines.py'
@@ -181,7 +190,7 @@ jobs:
         run: python scripts/load/guidelines.py
 
   # ---------------------------------------------------------------------------
-  # Deploy Foundry agents (only when agent definitions change)
+  # Deploy Foundry agents (only the ones whose definition files changed)
   # ---------------------------------------------------------------------------
   deploy-agents:
     if: needs.changes.outputs.agents == 'true'
@@ -201,13 +210,33 @@ jobs:
         with:
           python-version: '3.12'
       - run: pip install -r agents/requirements.txt
+      - name: Build --only flag from changed agents
+        id: agent-list
+        run: |
+          AGENTS=""
+          if [ "${{ needs.changes.outputs.agent_researcher }}" = "true" ]; then AGENTS="$AGENTS researcher"; fi
+          if [ "${{ needs.changes.outputs.agent_auditor }}" = "true" ];    then AGENTS="$AGENTS auditor"; fi
+          if [ "${{ needs.changes.outputs.agent_briefer }}" = "true" ];    then AGENTS="$AGENTS briefer"; fi
+          AGENTS=$(echo "$AGENTS" | xargs)  # trim whitespace
+          echo "agents=$AGENTS" >> $GITHUB_OUTPUT
+          if [ -z "$AGENTS" ]; then
+            echo "info=Shared agent code changed – deploying all agents" >> $GITHUB_OUTPUT
+          else
+            echo "info=Deploying: $AGENTS" >> $GITHUB_OUTPUT
+          fi
       - name: Deploy Foundry agents
         run: |
+          echo "${{ steps.agent-list.outputs.info }}"
+          ONLY_FLAG=""
+          if [ -n "${{ steps.agent-list.outputs.agents }}" ]; then
+            ONLY_FLAG="--only ${{ steps.agent-list.outputs.agents }}"
+          fi
           python agents/deploy.py \
             --project-endpoint  "${{ needs.read-infra.outputs.ai_project_endpoint }}" \
             --model-deployment  gpt-4.1 \
             --key-vault-name    "${{ needs.read-infra.outputs.key_vault_name }}" \
-            --search-connection-name brandsense-search
+            --search-connection-name brandsense-search \
+            $ONLY_FLAG
 
   # ---------------------------------------------------------------------------
   # Smoke test (runs after any deploy job that executed)

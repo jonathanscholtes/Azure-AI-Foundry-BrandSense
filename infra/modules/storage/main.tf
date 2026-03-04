@@ -1,3 +1,11 @@
+terraform {
+  required_providers {
+    azapi = {
+      source = "Azure/azapi"
+    }
+  }
+}
+
 resource "azurerm_storage_account" "main" {
   name                     = replace(var.storage_account_name, "-", "")
   location                 = var.location
@@ -17,12 +25,24 @@ resource "azurerm_storage_account" "main" {
   )
 }
 
-resource "azurerm_storage_container" "containers" {
+# Use azapi_resource instead of azurerm_storage_container because the
+# azurerm provider's container resource uses the Blob data-plane API, which
+# requires Storage Blob Data Contributor.  That creates a chicken-and-egg
+# during the first apply: the role assignment hasn't propagated yet when
+# Terraform tries to refresh container state.  The azapi provider talks to
+# the ARM management plane, which only needs the standard Contributor role.
+resource "azapi_resource" "containers" {
   for_each = toset(var.storage_containers)
 
-  name                  = each.key
-  storage_account_name  = azurerm_storage_account.main.name
-  container_access_type = "private"
+  type      = "Microsoft.Storage/storageAccounts/blobServices/containers@2023-05-01"
+  name      = each.key
+  parent_id = "${azurerm_storage_account.main.id}/blobServices/default"
+
+  body = {
+    properties = {
+      publicAccess = "None"
+    }
+  }
 }
 
 resource "azurerm_role_assignment" "table_contributor" {

@@ -24,11 +24,22 @@ Usage:
 
 import argparse
 import logging
+import os
 import sys
 from typing import Optional
 
+# When run as a script (python agents/deploy.py) the repo root is not
+# automatically on sys.path, so the 'agents' package import below would fail.
+# Insert the repo root explicitly.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from azure.ai.projects import AIProjectClient
-from azure.ai.projects.models import AzureAISearchAgentTool
+from azure.ai.projects.models import (
+    AISearchIndexResource,
+    AzureAISearchAgentTool,
+    AzureAISearchToolResource,
+    PromptAgentDefinition,
+)
 from azure.identity import DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient
 
@@ -37,8 +48,15 @@ from agents import researcher, auditor, briefer
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
-# Ordered list of agent modules to deploy
-AGENT_MODULES = [researcher, auditor, briefer]
+# Map of short name -> module (used by --only filter)
+AGENT_MODULE_MAP = {
+    "researcher": researcher,
+    "auditor":    auditor,
+    "briefer":    briefer,
+}
+
+# Ordered list of agent modules to deploy (all agents)
+AGENT_MODULES = list(AGENT_MODULE_MAP.values())
 
 # Default Foundry connection name created by Terraform
 DEFAULT_SEARCH_CONNECTION_NAME = "brandsense-search"
@@ -123,33 +141,41 @@ class AgentDeployer:
             return []
         return [
             AzureAISearchAgentTool(
-                index_connection_id=self.search_connection_id,
-                index_name="brandsense-guidelines",
+                azure_ai_search=AzureAISearchToolResource(
+                    indexes=[
+                        AISearchIndexResource(
+                            project_connection_id=self.search_connection_id,
+                            index_name="brandsense-guidelines",
+                        )
+                    ]
+                )
             )
         ]
 
     def _create_or_update(self, agent_name: str, instructions: str, tools: list) -> str:
         """Create or update a named agent and return its ID."""
+        definition = PromptAgentDefinition(
+            model=self.model_deployment,
+            instructions=instructions,
+            tools=tools or None,
+        )
+
         existing = None
         try:
-            existing = self.project_client.agents.get_agent(agent_name)
+            existing = self.project_client.agents.get(agent_name)
         except Exception:
             pass  # agent does not exist yet
 
         if existing:
-            agent = self.project_client.agents.update_agent(
-                agent_id=existing.id,
-                model=self.model_deployment,
-                instructions=instructions,
-                tools=tools,
+            agent = self.project_client.agents.update(
+                agent_name=agent_name,
+                definition=definition,
             )
             logger.info("Updated  %-35s id=%s", agent_name, agent.id)
         else:
-            agent = self.project_client.agents.create_agent(
-                model=self.model_deployment,
-                name=agent_name,
-                instructions=instructions,
-                tools=tools,
+            agent = self.project_client.agents.create_version(
+                agent_name=agent_name,
+                definition=definition,
             )
             logger.info("Created  %-35s id=%s", agent_name, agent.id)
 
@@ -163,13 +189,32 @@ class AgentDeployer:
     # Public API
     # ------------------------------------------------------------------
 
-    def deploy_all(self) -> dict:
+    def deploy(self, only: Optional[list] = None) -> dict:
+        """Deploy agents.
+
+        Args:
+            only: If provided, a list of short agent names (e.g. ["researcher"])
+                  to deploy.  When *None* or empty, all agents are deployed.
+        """
+        if only:
+            modules = [AGENT_MODULE_MAP[n] for n in only if n in AGENT_MODULE_MAP]
+            if not modules:
+                logger.error(
+                    "None of the requested agents matched: %s  (valid: %s)",
+                    only, list(AGENT_MODULE_MAP.keys()),
+                )
+                sys.exit(1)
+        else:
+            modules = AGENT_MODULES
+
+        label = ", ".join(m.NAME for m in modules)
         logger.info("=" * 60)
         logger.info("BrandSense - deploying Foundry agents")
         logger.info("  Project    : %s", self.project_endpoint)
         logger.info("  Model      : %s", self.model_deployment)
         logger.info("  KV         : %s", self.key_vault_name)
         logger.info("  Search conn: %s", self.search_connection_name or "(auto-discover)")
+        logger.info("  Agents     : %s", label)
         logger.info("=" * 60)
 
         # Resolve AI Search connection ID from name (or auto-discover)
@@ -178,7 +223,7 @@ class AgentDeployer:
         results = {}
 
         try:
-            for agent_mod in AGENT_MODULES:
+            for agent_mod in modules:
                 tools = search_tools if agent_mod.USES_SEARCH else []
                 agent_id = self._create_or_update(
                     agent_mod.NAME,
@@ -189,14 +234,10 @@ class AgentDeployer:
                 self._write_kv_secret(agent_mod.KV_SECRET, agent_id)
 
             logger.info("=" * 60)
-            logger.info("[OK] All agents deployed.")
+            logger.info("[OK] Agents deployed.")
             for name, aid in results.items():
                 logger.info("  %-35s : %s", name, aid)
             logger.info("=" * 60)
-            logger.info(
-                "Next: add the APIM MCP Server connection to "
-                "'brandsense-auditor' in the Foundry portal."
-            )
             return results
 
         except Exception:
@@ -223,6 +264,14 @@ def main():
              "Defaults to 'brandsense-search'. "
              "If not found, auto-discovers the first AI Search connection.",
     )
+    parser.add_argument(
+        "--only",
+        nargs="+",
+        choices=list(AGENT_MODULE_MAP.keys()),
+        default=None,
+        help="Deploy only the specified agent(s).  "
+             "Omit to deploy all agents.",
+    )
     args = parser.parse_args()
 
     deployer = AgentDeployer(
@@ -231,7 +280,7 @@ def main():
         key_vault_name=args.key_vault_name,
         search_connection_name=args.search_connection_name,
     )
-    deployer.deploy_all()
+    deployer.deploy(only=args.only)
 
 
 if __name__ == "__main__":

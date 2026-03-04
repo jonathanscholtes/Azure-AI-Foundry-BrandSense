@@ -191,6 +191,13 @@ variable "container_app_ui_image" {
   default     = "mcr.microsoft.com/azuredocs/containerapps-helloworld:latest"
 }
 
+# GitHub Actions service principal
+variable "github_sp_object_id" {
+  description = "Object ID of the GitHub Actions service principal. When set, grants the SP the same data-plane roles the deploying user receives (KV Secrets Officer, AI Project Management, AI User, Search Index Data Contributor)."
+  type        = string
+  default     = ""
+}
+
 # Tagging
 variable "tags" {
   description = "Common tags for all resources"
