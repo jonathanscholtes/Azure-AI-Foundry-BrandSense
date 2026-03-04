@@ -1,0 +1,101 @@
+[
+  {
+    "id": "legal-001",
+    "category": "legal",
+    "rule": "Mandatory copyright notice",
+    "value": "© [Year] Microsoft Corporation. All rights reserved.",
+    "jurisdiction": "Global",
+    "dimension": null,
+    "description": "All externally published marketing assets must include a copyright notice in the format '© [Year] Microsoft Corporation. All rights reserved.' Placement: footer or back page, minimum 8pt font."
+  },
+  {
+    "id": "legal-002",
+    "category": "legal",
+    "rule": "Trademark symbol on first use",
+    "value": "® or ™ required on first mention of registered/unregistered marks",
+    "jurisdiction": "Global",
+    "dimension": null,
+    "description": "Registered trademarks (®) and unregistered trademarks (™) must carry their respective symbols on the first use within each marketing asset. Subsequent uses in the same document do not require the symbol."
+  },
+  {
+    "id": "legal-003",
+    "category": "legal",
+    "rule": "Pricing — accuracy and currency",
+    "value": "All prices must be current, include currency code, and carry 'prices subject to change' disclaimer",
+    "jurisdiction": "Global",
+    "dimension": null,
+    "description": "Any asset quoting prices must state prices accurate at time of publication, include ISO 4217 currency codes (e.g. USD, EUR, GBP), and include the disclaimer: 'Prices shown are estimated retail prices and are subject to change without notice.'"
+  },
+  {
+    "id": "legal-004",
+    "category": "legal",
+    "rule": "GDPR — data collection disclosure",
+    "value": "Any data collection mechanism must link to Privacy Statement",
+    "jurisdiction": "EU / EEA",
+    "dimension": null,
+    "description": "Marketing assets targeting EU/EEA audiences that include forms, QR codes, or links collecting personal data must display a clear Privacy Statement link and a brief statement of processing purpose, in compliance with GDPR Article 13."
+  },
+  {
+    "id": "legal-005",
+    "category": "legal",
+    "rule": "CCPA — Do Not Sell disclosure",
+    "value": "'Do Not Sell My Personal Information' link required for California-targeted assets",
+    "jurisdiction": "California, USA",
+    "dimension": null,
+    "description": "Digital marketing assets targeting California residents must include a 'Do Not Sell or Share My Personal Information' link linking to the relevant opt-out page, as required by the California Consumer Privacy Act (CCPA) as amended by CPRA."
+  },
+  {
+    "id": "legal-006",
+    "category": "legal",
+    "rule": "Accessibility — WCAG 2.1 AA compliance",
+    "value": "All digital assets must meet WCAG 2.1 Level AA",
+    "jurisdiction": "USA / EU / Global",
+    "dimension": null,
+    "description": "Digital marketing assets must comply with WCAG 2.1 Level AA guidelines, including minimum 4.5:1 colour contrast ratio for normal text, text alternatives for non-text content, and keyboard navigability. Required by ADA (USA) and EN 301 549 (EU)."
+  },
+  {
+    "id": "legal-007",
+    "category": "legal",
+    "rule": "Testimonials — authenticity",
+    "value": "All customer testimonials must be genuine, attributed, and consented",
+    "jurisdiction": "Global",
+    "dimension": null,
+    "description": "Customer quotes and testimonials must be verbatim or approved paraphrases from real customers who have provided written consent for their name, title, company, and quote to be used in marketing materials. Fabricated or composite testimonials are prohibited."
+  },
+  {
+    "id": "legal-008",
+    "category": "legal",
+    "rule": "Comparative claims — substantiation",
+    "value": "Any competitive comparison must be accurate, current, and verifiable",
+    "jurisdiction": "Global",
+    "dimension": null,
+    "description": "Claims comparing BrandSense products to competitor products must be based on verifiable, current, and fairly conducted tests or publicly available data. The comparison methodology and source must be available on request. Misleading comparisons may violate FTC guidelines (USA) or EU Comparative Advertising Directive."
+  },
+  {
+    "id": "legal-009",
+    "category": "legal",
+    "rule": "Health and safety claims prohibited",
+    "value": "No unsubstantiated health, safety, or performance guarantees",
+    "jurisdiction": "Global",
+    "dimension": null,
+    "description": "Marketing materials must not make unsubstantiated guarantees of health improvements, safety outcomes, or performance results. Any such claims require documented clinical or technical evidence reviewed by Legal before publication."
+  },
+  {
+    "id": "legal-010",
+    "category": "legal",
+    "rule": "Export control — restricted regions",
+    "value": "Assets must not be distributed to OFAC-sanctioned countries",
+    "jurisdiction": "USA",
+    "dimension": null,
+    "description": "Marketing materials, including digital downloads, must not be made available in countries subject to OFAC sanctions (e.g. Cuba, Iran, North Korea, Syria, Russia). Digital distribution channels must implement geo-restriction where required."
+  },
+  {
+    "id": "legal-011",
+    "category": "legal",
+    "rule": "AI-generated content disclosure",
+    "value": "AI-generated imagery or copy must be disclosed if materially relevant",
+    "jurisdiction": "EU",
+    "dimension": null,
+    "description": "Under the EU AI Act, marketing assets distributed in the EU that contain AI-generated imagery, synthetic voices, or AI-written copy that could be mistaken for human-created content must include a clear disclosure. Applies to deepfake-style imagery and fully AI-generated campaign copy."
+  }
+]

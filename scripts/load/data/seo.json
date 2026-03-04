@@ -1,0 +1,110 @@
+[
+  {
+    "id": "seo-001",
+    "category": "seo",
+    "rule": "Primary keyword in headline",
+    "value": "H1 must contain the target keyword",
+    "jurisdiction": null,
+    "dimension": "on-page",
+    "description": "The primary target keyword for the asset must appear in the H1 or main headline. For print assets, the equivalent is the primary cover or section headline. Keyword must appear naturally — no keyword stuffing."
+  },
+  {
+    "id": "seo-002",
+    "category": "seo",
+    "rule": "Meta title length",
+    "value": "50–60 characters including primary keyword",
+    "jurisdiction": null,
+    "dimension": "metadata",
+    "description": "Digital landing pages and downloadable assets with associated landing pages must have a meta title between 50 and 60 characters. The primary keyword must appear within the first 60 characters. Titles truncated by search engines lose click-through rate."
+  },
+  {
+    "id": "seo-003",
+    "category": "seo",
+    "rule": "Meta description length",
+    "value": "150–160 characters including a call to action",
+    "jurisdiction": null,
+    "dimension": "metadata",
+    "description": "Meta descriptions must be 150–160 characters and include both the primary keyword and a clear call to action (e.g. 'Learn more', 'Download the guide', 'Request a demo'). Missing or duplicate meta descriptions reduce organic search visibility."
+  },
+  {
+    "id": "seo-004",
+    "category": "seo",
+    "rule": "Alt text on all images",
+    "value": "Descriptive alt text required; keyword inclusion where natural",
+    "jurisdiction": null,
+    "dimension": "accessibility-seo",
+    "description": "All images in digital marketing assets must have descriptive alt text that accurately conveys the image content. Where natural, include the primary or secondary keyword. Alt text must not be empty, generic ('image', 'photo'), or keyword-stuffed."
+  },
+  {
+    "id": "seo-005",
+    "category": "seo",
+    "rule": "Keyword density",
+    "value": "1–3% keyword density; avoid stuffing",
+    "jurisdiction": null,
+    "dimension": "on-page",
+    "description": "The primary keyword should appear at a density of 1–3% of total word count. Keyword density above 3% is considered keyword stuffing and may trigger search engine penalties. Secondary keywords should appear 2–5 times per 1,000 words."
+  },
+  {
+    "id": "seo-006",
+    "category": "seo",
+    "rule": "Heading hierarchy",
+    "value": "Single H1; logical H2/H3 structure; no skipped levels",
+    "jurisdiction": null,
+    "dimension": "on-page",
+    "description": "Digital assets must have exactly one H1 tag per page. Subsequent sections use H2 and H3 in logical order — heading levels must not be skipped (e.g. H1 → H3 without H2). Correct heading hierarchy improves both SEO and screen-reader accessibility."
+  },
+  {
+    "id": "seo-007",
+    "category": "seo",
+    "rule": "URL structure for landing pages",
+    "value": "Short, descriptive, hyphen-separated, keyword-included",
+    "jurisdiction": null,
+    "dimension": "technical",
+    "description": "Landing page URLs must be short (under 75 characters), human-readable, use hyphens (not underscores) as word separators, and include the primary keyword. Dynamic parameters and session IDs must be excluded from canonical URLs."
+  },
+  {
+    "id": "seo-008",
+    "category": "seo",
+    "rule": "Internal linking",
+    "value": "Minimum 2 internal links per landing page to related content",
+    "jurisdiction": null,
+    "dimension": "on-page",
+    "description": "Digital landing pages associated with marketing assets must contain at least two internal links to related product pages, case studies, or resource articles. Anchor text must be descriptive (not 'click here' or 'learn more' without context)."
+  },
+  {
+    "id": "seo-009",
+    "category": "seo",
+    "rule": "Page load performance",
+    "value": "Core Web Vitals: LCP < 2.5s, CLS < 0.1, INP < 200ms",
+    "jurisdiction": null,
+    "dimension": "technical",
+    "description": "Digital marketing asset landing pages must meet Google Core Web Vitals thresholds: Largest Contentful Paint (LCP) under 2.5 seconds, Cumulative Layout Shift (CLS) under 0.1, and Interaction to Next Paint (INP) under 200ms. Failure impacts organic search ranking."
+  },
+  {
+    "id": "seo-010",
+    "category": "seo",
+    "rule": "Structured data — Article or Product schema",
+    "value": "Schema.org Article or Product markup required on editorial and product pages",
+    "jurisdiction": null,
+    "dimension": "technical",
+    "description": "Marketing landing pages for product campaigns must include Schema.org Product markup. Editorial campaign pages (whitepapers, guides) must include Article markup. Structured data enables rich results in search and improves click-through rate."
+  },
+  {
+    "id": "seo-011",
+    "category": "seo",
+    "rule": "Canonical tag",
+    "value": "Self-referencing canonical tag required on all landing pages",
+    "jurisdiction": null,
+    "dimension": "technical",
+    "description": "Every landing page associated with a marketing asset must include a self-referencing canonical tag to prevent duplicate content issues when the page is accessed via multiple URL paths (e.g. with/without trailing slash, with UTM parameters)."
+  },
+  {
+    "id": "seo-012",
+    "category": "seo",
+    "rule": "Call to action prominence",
+    "value": "Primary CTA above the fold; secondary CTA at end of content",
+    "jurisdiction": null,
+    "dimension": "conversion",
+    "description": "Landing pages must place the primary call to action (e.g. 'Request a demo', 'Download now') above the fold without scrolling. A secondary CTA must appear at the end of the main content body. CTA button text must be action-oriented and specific."
+  }
+]

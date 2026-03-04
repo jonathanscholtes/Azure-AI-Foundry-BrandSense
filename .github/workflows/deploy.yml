@@ -1,0 +1,184 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+# ---------------------------------------------------------------------------
+# Hardcoded constants — not secrets, just naming conventions.
+# Only 3 secrets are required: AZURE_CLIENT_ID, AZURE_TENANT_ID,
+# AZURE_SUBSCRIPTION_ID. Set them once with scripts/New-GitHubOidc.ps1.
+# ---------------------------------------------------------------------------
+env:
+  ACR_LOGIN_SERVER: acrbrnd.azurecr.io   # matches infra/variables.tf default
+  TF_STATE_RG: rg-tfstate-brnd
+  TF_STATE_STORAGE: stotfstatebrnd
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 1. Build & push container images to ACR
+  # ---------------------------------------------------------------------------
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Build & push Python API image
+        run: |
+          az acr build --registry ${{ env.ACR_LOGIN_SERVER }} \
+            --image brnd-api:${{ github.sha }} \
+            --file apps/services/brandsense-api/Dockerfile .
+      - name: Build & push React UI image
+        run: |
+          az acr build --registry ${{ env.ACR_LOGIN_SERVER }} \
+            --image brnd-ui:${{ github.sha }} \
+            --file apps/ui/Dockerfile \
+            apps/ui
+
+  # ---------------------------------------------------------------------------
+  # 2. Terraform — apply infrastructure, expose all outputs as job outputs
+  # ---------------------------------------------------------------------------
+  terraform-apply:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    outputs:
+      resource_group_name: ${{ steps.tf-out.outputs.resource_group_name }}
+      search_endpoint:     ${{ steps.tf-out.outputs.search_endpoint }}
+      ai_project_name:     ${{ steps.tf-out.outputs.ai_project_name }}
+      ai_project_endpoint: ${{ steps.tf-out.outputs.ai_project_endpoint }}
+      key_vault_name:      ${{ steps.tf-out.outputs.key_vault_name }}
+      container_app_url:   ${{ steps.tf-out.outputs.container_app_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false   # required for clean `terraform output` capture
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Bootstrap Terraform state backend
+        run: |
+          az group create \
+            --name ${{ env.TF_STATE_RG }} \
+            --location eastus2 \
+            --output none || true
+          az storage account create \
+            --name ${{ env.TF_STATE_STORAGE }} \
+            --resource-group ${{ env.TF_STATE_RG }} \
+            --sku Standard_LRS \
+            --allow-blob-public-access false \
+            --min-tls-version TLS1_2 \
+            --output none || true
+          az storage container create \
+            --name tfstate \
+            --account-name ${{ env.TF_STATE_STORAGE }} \
+            --auth-mode login \
+            --output none || true
+      - name: Terraform init
+        working-directory: infra
+        run: |
+          terraform init \
+            -backend-config="storage_account_name=${{ env.TF_STATE_STORAGE }}"
+      - name: Terraform apply
+        working-directory: infra
+        run: terraform apply -auto-approve
+      - name: Capture Terraform outputs
+        id: tf-out
+        working-directory: infra
+        run: |
+          echo "resource_group_name=$(terraform output -raw resource_group_name)"  >> $GITHUB_OUTPUT
+          echo "search_endpoint=$(terraform output -raw search_service_endpoint)"  >> $GITHUB_OUTPUT
+          echo "ai_project_name=$(terraform output -raw ai_project_name)"          >> $GITHUB_OUTPUT
+          echo "ai_project_endpoint=$(terraform output -raw ai_project_endpoint)"  >> $GITHUB_OUTPUT
+          echo "key_vault_name=$(terraform output -raw key_vault_name)"            >> $GITHUB_OUTPUT
+          echo "container_app_url=$(terraform output -raw container_app_url)"      >> $GITHUB_OUTPUT
+
+  # ---------------------------------------------------------------------------
+  # 3. Seed AI Search guidelines index
+  # ---------------------------------------------------------------------------
+  seed-guidelines:
+    needs: terraform-apply
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r scripts/load/requirements.txt
+      - name: Seed guidelines index
+        env:
+          AZURE_SEARCH_ENDPOINT: ${{ needs.terraform-apply.outputs.search_endpoint }}
+        run: python scripts/load/guidelines.py
+
+  # ---------------------------------------------------------------------------
+  # 4. Deploy Foundry agents (Researcher / Auditor / Briefer)
+  # ---------------------------------------------------------------------------
+  deploy-agents:
+    needs: terraform-apply
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r scripts/requirements-agents.txt
+      - name: Register AI Search connection in Foundry project
+        run: |
+          az extension add --name ml --yes --only-show-errors
+          cat > /tmp/connection.yml << EOF
+          name: brandsense-search
+          type: azure_ai_search
+          endpoint: ${{ needs.terraform-apply.outputs.search_endpoint }}
+          EOF
+          az ml connection create \
+            --file /tmp/connection.yml \
+            --resource-group ${{ needs.terraform-apply.outputs.resource_group_name }} \
+            --workspace-name  ${{ needs.terraform-apply.outputs.ai_project_name }} \
+          || echo "Connection may already exist — continuing."
+      - name: Deploy Foundry agents
+        run: |
+          python scripts/deploy_foundry_agents.py \
+            --project-endpoint  ${{ needs.terraform-apply.outputs.ai_project_endpoint }} \
+            --model-deployment  gpt-4.1 \
+            --key-vault-name    ${{ needs.terraform-apply.outputs.key_vault_name }} \
+            --search-connection-name brandsense-search
+
+  # ---------------------------------------------------------------------------
+  # 5. Smoke test
+  # ---------------------------------------------------------------------------
+  validate:
+    needs: [terraform-apply, seed-guidelines, deploy-agents]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Health check
+        run: |
+          curl --fail --retry 5 --retry-delay 10 \
+            ${{ needs.terraform-apply.outputs.container_app_url }}/health

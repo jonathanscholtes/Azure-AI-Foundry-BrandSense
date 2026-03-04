@@ -1,0 +1,7 @@
+# apps/ui — ignore build artifacts and local modules
+node_modules/
+dist/
+.env
+.env.local
+.env.*.local
+*.log

@@ -1,0 +1,76 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info
+dist
+build
+.venv
+venv
+env
+*.egg
+
+# Jupyter Notebooks
+notebooks/
+*.ipynb
+.ipynb_checkpoints
+
+# Documentation
+*.md
+README.md
+TODO.md
+AGENTS_DEPLOYMENT.md
+project_create.md
+
+# Scripts (not needed in containers)
+scripts/
+
+# Infrastructure
+infra/
+*.bicep
+
+# Kubernetes
+k8s/
+
+# Observability
+observability/
+
+# Deployment scripts
+deploy.ps1
+deploy.sh
+*.ps1
+*.sh
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+.pytest_cache
+.coverage
+htmlcov
+.tox
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose.yml
+
+# Other
+*.log
+*.bak
+*.tmp

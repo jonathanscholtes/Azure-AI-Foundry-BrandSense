@@ -1,0 +1,137 @@
+[
+  {
+    "id": "brand-001",
+    "category": "brand",
+    "rule": "Primary brand colour",
+    "value": "#0078D4",
+    "jurisdiction": null,
+    "dimension": null,
+    "description": "The primary brand colour is Microsoft Blue (#0078D4). All hero backgrounds, primary buttons, and key headlines must use this colour. No other blue variants are permitted as the primary brand colour."
+  },
+  {
+    "id": "brand-002",
+    "category": "brand",
+    "rule": "Secondary brand colour",
+    "value": "#50E6FF",
+    "jurisdiction": null,
+    "dimension": null,
+    "description": "The secondary brand colour is Azure Cyan (#50E6FF). Used for accents, highlights, and data visualisation. Must never be used as a background on large areas."
+  },
+  {
+    "id": "brand-003",
+    "category": "brand",
+    "rule": "Prohibited colour — red",
+    "value": "No red (#FF0000 or similar) in general content",
+    "jurisdiction": null,
+    "dimension": null,
+    "description": "Red is reserved exclusively for error states and critical alerts in product UI. Red must never appear in marketing assets, campaign imagery, or editorial content."
+  },
+  {
+    "id": "brand-004",
+    "category": "brand",
+    "rule": "Primary typeface",
+    "value": "Segoe UI",
+    "jurisdiction": null,
+    "dimension": null,
+    "description": "All marketing materials must use Segoe UI as the primary typeface. Acceptable weights: Regular (400), SemiBold (600), Bold (700). Italic variants are permitted only for editorial pull-quotes."
+  },
+  {
+    "id": "brand-005",
+    "category": "brand",
+    "rule": "Fallback typeface",
+    "value": "Roboto or Arial",
+    "jurisdiction": null,
+    "dimension": null,
+    "description": "When Segoe UI is unavailable (e.g. non-Windows print environments), Roboto or Arial may be substituted. No other sans-serif substitutions are permitted."
+  },
+  {
+    "id": "brand-006",
+    "category": "brand",
+    "rule": "Prohibited typefaces",
+    "value": "Comic Sans, Papyrus, Times New Roman, Courier New prohibited",
+    "jurisdiction": null,
+    "dimension": null,
+    "description": "Comic Sans, Papyrus, Times New Roman, and Courier New are strictly prohibited in all marketing materials regardless of context."
+  },
+  {
+    "id": "brand-007",
+    "category": "brand",
+    "rule": "Minimum body font size",
+    "value": "10pt / 13px minimum",
+    "jurisdiction": null,
+    "dimension": null,
+    "description": "Body copy font size must be no smaller than 10pt in print or 13px in digital. Footnotes and legal disclaimers may use 8pt/11px minimum."
+  },
+  {
+    "id": "brand-008",
+    "category": "brand",
+    "rule": "Logo clear space",
+    "value": "Minimum clear space equals the height of the logo mark",
+    "jurisdiction": null,
+    "dimension": null,
+    "description": "The brand logo must be surrounded by clear space equal to the height of the logo mark on all sides. No text, imagery, or graphic elements may intrude into this clear space."
+  },
+  {
+    "id": "brand-009",
+    "category": "brand",
+    "rule": "Logo minimum size",
+    "value": "24px height digital / 0.5 inch print",
+    "jurisdiction": null,
+    "dimension": null,
+    "description": "The brand logo must not be reproduced smaller than 24px in height for digital media or 0.5 inch in height for print. Below this size legibility is compromised."
+  },
+  {
+    "id": "brand-010",
+    "category": "brand",
+    "rule": "Logo colour usage",
+    "value": "Full colour on white/light; white reversed on dark; no recolouring",
+    "jurisdiction": null,
+    "dimension": null,
+    "description": "The logo may appear in full colour on white or light grey backgrounds, or reversed in white on dark or primary-colour backgrounds. Re-colouring, adding gradients, or applying transparency to the logo is strictly prohibited."
+  },
+  {
+    "id": "brand-011",
+    "category": "brand",
+    "rule": "Tone of voice — confident",
+    "value": "Assertive, clear, no hedging language",
+    "jurisdiction": null,
+    "dimension": null,
+    "description": "Copy must be confident and direct. Avoid hedging language such as 'might', 'could possibly', 'we think', or 'we believe'. State capabilities and benefits as facts."
+  },
+  {
+    "id": "brand-012",
+    "category": "brand",
+    "rule": "Tone of voice — human",
+    "value": "Conversational, no jargon, active voice",
+    "jurisdiction": null,
+    "dimension": null,
+    "description": "Write as a knowledgeable person speaking to a peer. Use active voice. Avoid unexplained acronyms, overly technical jargon, and passive constructions."
+  },
+  {
+    "id": "brand-013",
+    "category": "brand",
+    "rule": "Prohibited superlatives",
+    "value": "No 'world-class', 'best-in-class', 'leading', 'revolutionary' without substantiation",
+    "jurisdiction": null,
+    "dimension": null,
+    "description": "Superlatives such as 'world-class', 'best-in-class', 'industry-leading', and 'revolutionary' are prohibited unless immediately substantiated with a cited third-party source or verifiable metric."
+  },
+  {
+    "id": "brand-014",
+    "category": "brand",
+    "rule": "Image style — photography",
+    "value": "Real people, authentic settings, natural lighting; no stock-photo clichés",
+    "jurisdiction": null,
+    "dimension": null,
+    "description": "Photography must depict real people in authentic professional or collaborative settings with natural or soft studio lighting. Avoid staged handshakes, blank-screen laptops, and obvious stock-photo compositions."
+  },
+  {
+    "id": "brand-015",
+    "category": "brand",
+    "rule": "Background — white space",
+    "value": "Minimum 20% white space on any content page",
+    "jurisdiction": null,
+    "dimension": null,
+    "description": "Each page or screen of a marketing asset must maintain at least 20% unoccupied white (or background colour) space to ensure readability and visual clarity."
+  }
+]
