@@ -3,23 +3,10 @@ FROM python:3.11-slim AS builder
 
 WORKDIR /build
 
-RUN pip install --upgrade pip hatchling
+COPY apps/services/brandsense-api/ ./
 
-COPY apps/services/brandsense-api/pyproject.toml ./
-
-RUN pip install --prefix=/install --no-cache-dir \
-    fastapi \
-    "uvicorn[standard]" \
-    pydantic \
-    pydantic-settings \
-    python-multipart \
-    PyMuPDF \
-    azure-ai-projects \
-    azure-ai-documentintelligence \
-    azure-search-documents \
-    azure-identity \
-    openai \
-    httpx
+RUN pip install --upgrade pip \
+ && pip install --prefix=/install --no-cache-dir .
 
 # ─── Stage 2: runtime ────────────────────────────────────────────────────────
 FROM python:3.11-slim AS runtime

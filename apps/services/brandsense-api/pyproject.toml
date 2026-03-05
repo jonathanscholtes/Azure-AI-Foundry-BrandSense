@@ -19,7 +19,8 @@ dependencies = [
     "pydantic-settings>=2.7.0",
 
     # Azure AI
-    "azure-ai-projects>=1.0.0",
+    "azure-ai-projects==2.0.0b2",
+    "aiohttp>=3.9.0",
     "azure-ai-documentintelligence>=1.0.0",
     "azure-search-documents>=11.6.0",
     "azure-identity>=1.19.0",

@@ -5,12 +5,73 @@ import {
 } from '@mui/material'
 import UploadFileIcon from '@mui/icons-material/UploadFile'
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline'
+import CheckCircleIcon from '@mui/icons-material/CheckCircle'
+import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline'
 import RestartAltIcon from '@mui/icons-material/RestartAlt'
+import SearchIcon from '@mui/icons-material/ManageSearch'
+import GavelIcon from '@mui/icons-material/Gavel'
+import ArticleIcon from '@mui/icons-material/Article'
 
 const ACCEPTED = 'application/pdf'
 const MAX_MB = 50
 
-export default function UploadPanel({ status, onValidate, onReset, errorMsg }) {
+const AGENT_STEPS = [
+  { key: 'researcher', label: 'Researcher', icon: SearchIcon,  desc: 'Retrieving guidelines' },
+  { key: 'auditor',    label: 'Auditor',    icon: GavelIcon,   desc: 'Auditing asset' },
+  { key: 'briefer',    label: 'Briefer',    icon: ArticleIcon, desc: 'Generating brief' },
+]
+
+function AgentStepper({ agentStatuses, progressMsg }) {
+  return (
+    <Box sx={{ width: '100%' }}>
+      {AGENT_STEPS.map((step, i) => {
+        const s = agentStatuses?.[step.key] ?? 'idle'
+        const Icon = step.icon
+        const isRunning = s === 'running'
+        const isDone    = s === 'done'
+        const isError   = s === 'error'
+        const dotColor  = isRunning ? '#F59E0B' : isDone ? '#16A34A' : isError ? '#EF4444' : 'text.disabled'
+        return (
+          <Box key={step.key} sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: i < 2 ? 1.5 : 0 }}>
+            {/* Step icon */}
+            <Box sx={{
+              width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              bgcolor: isDone ? 'success.50' : isRunning ? 'warning.50' : isError ? 'error.50' : 'grey.100',
+            }}>
+              {isRunning
+                ? <CircularProgress size={16} thickness={5} sx={{ color: '#F59E0B' }} />
+                : isDone
+                  ? <CheckCircleIcon sx={{ fontSize: 16, color: 'success.main' }} />
+                  : isError
+                    ? <ErrorOutlineIcon sx={{ fontSize: 16, color: 'error.main' }} />
+                    : <Icon sx={{ fontSize: 16, color: 'text.disabled' }} />
+              }
+            </Box>
+            {/* Label + live message */}
+            <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+              <Typography variant="caption" fontWeight={600}
+                sx={{ color: isRunning ? 'warning.dark' : isDone ? 'success.dark' : isError ? 'error.main' : 'text.disabled', display: 'block' }}>
+                {step.label}
+              </Typography>
+              <Typography variant="caption" color="text.disabled" noWrap display="block" sx={{ fontSize: '0.68rem' }}>
+                {isRunning && progressMsg ? progressMsg : step.desc}
+              </Typography>
+            </Box>
+            {/* Status dot */}
+            <Box sx={{
+              width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
+              bgcolor: dotColor,
+              boxShadow: isRunning ? `0 0 6px ${dotColor}` : 'none',
+            }} />
+          </Box>
+        )
+      })}
+    </Box>
+  )
+}
+
+export default function UploadPanel({ status, onValidate, onReset, errorMsg, agentStatuses, progressMsg }) {
   const [file, setFile] = useState(null)
   const [dragOver, setDragOver] = useState(false)
 
@@ -76,20 +137,20 @@ export default function UploadPanel({ status, onValidate, onReset, errorMsg }) {
         }}
       >
         {isLoading ? (
-          <CircularProgress size={40} />
+          <Box sx={{ width: '100%' }}>
+            <AgentStepper agentStatuses={agentStatuses} progressMsg={progressMsg} />
+          </Box>
         ) : file && isDone ? (
           <CheckCircleOutlineIcon color="success" sx={{ fontSize: 40 }} />
         ) : (
           <UploadFileIcon sx={{ fontSize: 40, color: 'grey.400' }} />
         )}
 
-        <Typography variant="body2" color="text.secondary" align="center">
-          {isLoading
-            ? 'Validating asset…'
-            : file
-            ? file.name
-            : 'Drag & drop a PDF here, or click to browse'}
-        </Typography>
+        {!isLoading && (
+          <Typography variant="body2" color="text.secondary" align="center">
+            {file ? file.name : 'Drag & drop a PDF here, or click to browse'}
+          </Typography>
+        )}
         {!file && !isLoading && (
           <Typography variant="caption" color="text.disabled">
             PDF · max {MAX_MB} MB

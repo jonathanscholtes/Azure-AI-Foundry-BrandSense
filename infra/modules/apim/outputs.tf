@@ -18,6 +18,11 @@ output "management_api_url" {
   value       = azurerm_api_management.main.management_api_url
 }
 
+output "product_id" {
+  description = "BrandSense APIM product ID"
+  value       = azurerm_api_management_product.brandsense.product_id
+}
+
 output "portal_url" {
   description = "Portal URL of the API Management service"
   value       = azurerm_api_management.main.portal_url

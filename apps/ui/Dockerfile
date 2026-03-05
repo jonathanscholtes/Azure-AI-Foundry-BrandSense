@@ -1,7 +1,7 @@
 # ---------------------------------------------------------------------------
 # Stage 1 — build the Vite/React app
 # ---------------------------------------------------------------------------
-FROM node:20-slim AS builder
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
@@ -15,25 +15,30 @@ RUN npm run build
 
 # ---------------------------------------------------------------------------
 # Stage 2 — serve with nginx
-# Nginx proxies /validate, /tools, /health → brandsense-api (API_URL env var)
+# Static nginx.conf proxies /validate, /tools, /health → http://brnd-api
+# (same Container Apps environment, internal HTTP, no TLS required).
 # ---------------------------------------------------------------------------
-FROM nginx:1.27-alpine AS runtime
+FROM nginx:1.25-alpine AS runtime
 
-# Remove default nginx site config
-RUN rm -f /etc/nginx/conf.d/default.conf
-
-# Copy nginx config template and entrypoint
-COPY nginx.conf.template /etc/nginx/templates/nginx.conf.template
-COPY docker-entrypoint.sh /docker-entrypoint.sh
-RUN chmod +x /docker-entrypoint.sh
-
-# Copy Vite build output
+# Copy static nginx config and Vite build output
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=builder /app/dist /usr/share/nginx/html
+
+# Drop root
+RUN sed -i '/^user /d' /etc/nginx/nginx.conf \
+    && addgroup -S app && adduser -S app -G app \
+    && chown -R app:app \
+         /usr/share/nginx/html \
+         /var/cache/nginx \
+         /var/log/nginx \
+         /etc/nginx/conf.d \
+    && touch /var/run/nginx.pid && chown app:app /var/run/nginx.pid
+
+USER app
 
 EXPOSE 80
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD wget -qO- http://localhost:80/ || exit 1
 
-# envsubst is included in nginx:alpine; entrypoint writes the final config
-ENTRYPOINT ["/docker-entrypoint.sh"]
+CMD ["nginx", "-g", "daemon off;"]

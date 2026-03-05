@@ -83,3 +83,27 @@ class HealthResponse(BaseModel):
     foundry_configured: bool
     document_intelligence_configured: bool
     search_configured: bool
+
+
+# ---------------------------------------------------------------------------
+# Streaming pipeline events (ndjson lines emitted by POST /validate)
+# ---------------------------------------------------------------------------
+
+class ProgressEvent(BaseModel):
+    """Emitted by the pipeline as each agent starts or finishes."""
+    event: str = "progress"
+    agent: str              # "researcher" | "auditor" | "briefer"
+    status: str             # "running" | "done" | "error"
+    message: str
+
+
+class CompleteEvent(BaseModel):
+    """Final line of the stream — carries the full BrieferOutput result."""
+    event: str = "complete"
+    result: BrieferOutput
+
+
+class ErrorEvent(BaseModel):
+    """Emitted if the pipeline fails before producing a result."""
+    event: str = "error"
+    message: str

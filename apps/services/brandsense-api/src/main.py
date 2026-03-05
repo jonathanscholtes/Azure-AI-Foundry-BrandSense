@@ -12,10 +12,11 @@ import uvicorn
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, UploadFile, Form, HTTPException
+from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from config import settings
-from models import BrieferOutput, HealthResponse
+from models import HealthResponse
 from tools.pymupdf import extract_font_color_metadata
 from workflow.pipeline import run_pipeline
 
@@ -60,22 +61,26 @@ def health():
     )
 
 
-@app.post("/validate", response_model=BrieferOutput)
-async def validate(file: UploadFile, context: str = Form(...)):
+@app.post("/validate")
+async def validate(file: UploadFile, context: str = Form(default="")):
     """Validate a marketing asset PDF.
 
-    Triggers the Foundry Researcher → Auditor → Briefer pipeline and returns
-    a scored, structured validation report.
+    Streams ndjson lines as each agent runs:
+      {"event": "progress", "agent": "researcher", "status": "running", "message": "..."}
+      {"event": "progress", "agent": "auditor",    "status": "done",    "message": "..."}
+      {"event": "complete", "result": { ...BrieferOutput... }}
+
+    The final line is always either "complete" or "error".
     """
-    if not settings.foundry_project_connection_string:
-        raise HTTPException(status_code=503, detail="Foundry project connection string not configured")
-
     pdf_bytes = await file.read()
-    logger.info("Received validation request: filename=%s context=%.80s", file.filename, context)
+    filename  = file.filename or "asset.pdf"
+    logger.info("Validation request: filename=%s context=%.80s", filename, context)
 
-    result = await run_pipeline(pdf_bytes=pdf_bytes, context=context)
-    logger.info("Validation complete: score=%s overall_pass=%s", result.score, result.brief)
-    return result
+    return StreamingResponse(
+        run_pipeline(pdf_bytes=pdf_bytes, context=context, filename=filename),
+        media_type="application/x-ndjson",
+        headers={"X-Accel-Buffering": "no"},  # disables nginx buffering for true streaming
+    )
 
 
 @app.post("/tools/extract-fonts")

@@ -22,8 +22,14 @@ class Settings(BaseSettings):
     # Microsoft Foundry
     foundry_project_connection_string: str = Field(
         default="",
-        description="Azure AI Foundry project connection string",
+        description="Azure AI Foundry project endpoint URL",
     )
+
+    # Foundry Agent IDs (written to Key Vault by deploy_foundry_agents.py,
+    # injected as env vars via Container Apps Key Vault references)
+    researcher_agent_id: str = Field(default="", description="Foundry agent ID for the Marketing Researcher")
+    auditor_agent_id: str = Field(default="", description="Foundry agent ID for the Marketing Auditor")
+    briefer_agent_id: str = Field(default="", description="Foundry agent ID for the Marketing Briefer")
 
     # Azure OpenAI
     azure_openai_endpoint: str = Field(default="")

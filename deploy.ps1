@@ -206,7 +206,7 @@ $containerAppUiUrl   = if ($tfOutputs -and $tfOutputs.PSObject.Properties['conta
 # Derive Foundry project endpoint from account + project name
 $aiProjectEndpoint = $null
 if ($aiAccountName -and $aiProjectName) {
-    $aiProjectEndpoint = "https://$aiAccountName.services.ai.azure.com/api/projects/$aiProjectName"
+    $aiProjectEndpoint = "https://${aiAccountName}.services.ai.azure.com/api/projects/$aiProjectName"
 }
 
 if ($resourceGroupName)  { Write-Host "  Resource Group      : $resourceGroupName"  -ForegroundColor Gray }
@@ -249,17 +249,25 @@ if (-not $acrName -or -not $resourceGroupName) {
     Write-Host "`nUpdating container apps to real ACR images..." -ForegroundColor Cyan
 
     $caUpdates = @(
-        @{ Name = 'brnd-api'; Image = "$acrServer/brnd-api:latest" },
-        @{ Name = 'brnd-ui';  Image = "$acrServer/brnd-ui:latest"  }
+        @{ Name = 'brnd-api'; Image = "$acrServer/brnd-api:latest"; EnvVars = @() },
+        @{ Name = 'brnd-ui';  Image = "$acrServer/brnd-ui:latest";  EnvVars = @() }
     )
     foreach ($ca in $caUpdates) {
         Write-Host "  Updating $($ca.Name) -> $($ca.Image)" -ForegroundColor Gray
-        az containerapp update `
-            --name           $ca.Name `
-            --resource-group $resourceGroupName `
-            --image          $ca.Image | Out-Null
+        $updateArgs = @(
+            'containerapp', 'update',
+            '--name',           $ca.Name,
+            '--resource-group', $resourceGroupName,
+            '--image',          $ca.Image
+        )
+        if ($ca.EnvVars -and $ca.EnvVars.Count -gt 0) {
+            Write-Host "    Setting env: $($ca.EnvVars -join ', ')" -ForegroundColor Gray
+            $updateArgs += '--set-env-vars'
+            $updateArgs += $ca.EnvVars
+        }
+        az @updateArgs | Out-Null
         if ($LASTEXITCODE -ne 0) {
-            Write-Host "WARNING: Failed to update $($ca.Name) image - the placeholder will remain until next deploy." -ForegroundColor Yellow
+            Write-Host "WARNING: Failed to update $($ca.Name) - the placeholder will remain until next deploy." -ForegroundColor Yellow
         }
     }
 }
@@ -316,6 +324,48 @@ if (-not $aiProjectEndpoint -or -not $keyVaultName) {
         Write-Host "WARNING: Agent deployment failed (exit $LASTEXITCODE) - continuing." -ForegroundColor Yellow
     } else {
         Write-Host "[OK] Foundry agents deployed." -ForegroundColor Green
+    }
+}
+
+# ---------------------------------------------------------------------------
+# PHASE 3.5: Inject Foundry config into brnd-api Container App
+# After Phase 3 writes agent IDs to Key Vault, read them back and set the
+# env vars that pipeline.py needs to call the deployed agents at runtime.
+# ---------------------------------------------------------------------------
+Write-Host "`n=== PHASE 3.5: Configure brnd-api Foundry Environment ===" -ForegroundColor Magenta
+
+if (-not $aiProjectEndpoint -or -not $keyVaultName -or -not $resourceGroupName) {
+    Write-Host "WARNING: Missing AI project endpoint, Key Vault, or resource group - skipping Foundry env var injection." -ForegroundColor Yellow
+} else {
+    Write-Host "  Reading agent IDs from Key Vault ($keyVaultName)..." -ForegroundColor Gray
+    $researcherAgentId = az keyvault secret show --vault-name $keyVaultName --name brandsense-researcher-agent-id --query value -o tsv 2>$null
+    $auditorAgentId    = az keyvault secret show --vault-name $keyVaultName --name brandsense-auditor-agent-id    --query value -o tsv 2>$null
+    $brieferAgentId    = az keyvault secret show --vault-name $keyVaultName --name brandsense-briefer-agent-id    --query value -o tsv 2>$null
+
+    if (-not $researcherAgentId -or -not $auditorAgentId -or -not $brieferAgentId) {
+        Write-Host "WARNING: Could not read all agent IDs from Key Vault - skipping env var injection." -ForegroundColor Yellow
+        Write-Host "         Run Deploy-FoundryAgents.ps1 to deploy agents first." -ForegroundColor Gray
+    } else {
+        Write-Host "  Agent IDs:" -ForegroundColor Gray
+        Write-Host "    Researcher : $researcherAgentId" -ForegroundColor Gray
+        Write-Host "    Auditor    : $auditorAgentId"    -ForegroundColor Gray
+        Write-Host "    Briefer    : $brieferAgentId"    -ForegroundColor Gray
+
+        Write-Host "  Updating brnd-api container app with Foundry env vars..." -ForegroundColor Cyan
+        az containerapp update `
+            --name brnd-api `
+            --resource-group $resourceGroupName `
+            --set-env-vars `
+                "FOUNDRY_PROJECT_CONNECTION_STRING=$aiProjectEndpoint" `
+                "RESEARCHER_AGENT_ID=$researcherAgentId" `
+                "AUDITOR_AGENT_ID=$auditorAgentId" `
+                "BRIEFER_AGENT_ID=$brieferAgentId" | Out-Null
+
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "[OK] Foundry env vars injected into brnd-api." -ForegroundColor Green
+        } else {
+            Write-Host "WARNING: Failed to update brnd-api env vars (exit $LASTEXITCODE)." -ForegroundColor Yellow
+        }
     }
 }
 
@@ -390,8 +440,11 @@ Write-Host "`n=== Service Endpoints ===" -ForegroundColor Cyan
 
 if ($containerAppUrl -and $containerAppUrl -ne '') {
     Write-Host "  API : ${containerAppUrl}/docs" -ForegroundColor Green
-    Write-Host "  UI  : ${containerAppUrl}"      -ForegroundColor Cyan
-} else {
+}
+if ($containerAppUiUrl -and $containerAppUiUrl -ne '') {
+    Write-Host "  UI  : ${containerAppUiUrl}"    -ForegroundColor Cyan
+}
+if (-not $containerAppUrl -and -not $containerAppUiUrl) {
     Write-Host "  Endpoints not yet available - run: terraform output container_app_url" -ForegroundColor Yellow
 }
 Write-Host @"

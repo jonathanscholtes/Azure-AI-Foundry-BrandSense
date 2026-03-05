@@ -9,12 +9,18 @@
 const BASE = import.meta.env.VITE_API_BASE ?? ''
 
 /**
- * POST /validate — upload a marketing asset (PDF) for validation.
+ * POST /validate — upload a PDF and stream ndjson progress + result.
+ *
+ * Async generator that yields parsed event objects as they arrive:
+ *   { event: 'progress', agent: 'researcher', status: 'running', message: '...' }
+ *   { event: 'progress', agent: 'auditor',    status: 'done',    message: '...' }
+ *   { event: 'complete', result: { ...BrieferOutput } }
+ *   { event: 'error',    message: '...' }   // on pipeline failure
  *
  * @param {File} file — PDF file selected by the user
- * @returns {Promise<import('../types').ValidationResult>}
+ * @yields {Object} parsed ndjson event
  */
-export async function validateAsset(file) {
+export async function* validateAssetStream(file) {
   const form = new FormData()
   form.append('file', file)
 
@@ -28,13 +34,27 @@ export async function validateAsset(file) {
     try {
       const body = await res.json()
       detail = body.detail ?? body.message ?? detail
-    } catch {
-      // ignore parse failure — use status text
-    }
+    } catch { /* ignore */ }
     throw new Error(detail)
   }
 
-  return res.json()
+  const reader  = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split('\n')
+    buffer = lines.pop() // keep last incomplete line
+    for (const line of lines) {
+      const trimmed = line.trim()
+      if (trimmed) yield JSON.parse(trimmed)
+    }
+  }
+  // flush any remaining buffer
+  if (buffer.trim()) yield JSON.parse(buffer.trim())
 }
 
 /**

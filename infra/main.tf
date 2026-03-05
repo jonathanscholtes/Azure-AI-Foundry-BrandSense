@@ -116,25 +116,29 @@ resource "azurerm_role_assignment" "current_user_search_index_contributor" {
   principal_id         = data.azurerm_client_config.current.object_id
 }
 
-# Allow deploying user to create/manage Foundry agents (AI Project Management)
-resource "azurerm_role_assignment" "current_user_ai_project_management" {
-  scope              = module.ai_services.ai_account_id
-  role_definition_id = "/subscriptions/${data.azurerm_client_config.current.subscription_id}/providers/Microsoft.Authorization/roleDefinitions/eadc314b-1a2d-4efa-be10-5d325db5065e"
-  principal_id       = data.azurerm_client_config.current.object_id
-}
-
-# Allow deploying user to invoke agents and use AI services (AI User)
-resource "azurerm_role_assignment" "current_user_ai_user" {
-  scope              = module.ai_services.ai_account_id
-  role_definition_id = "/subscriptions/${data.azurerm_client_config.current.subscription_id}/providers/Microsoft.Authorization/roleDefinitions/53ca6127-db72-4b80-b1b0-d745d6d5456d"
-  principal_id       = data.azurerm_client_config.current.object_id
-}
-
 # Allow deploying user to write agent IDs to Key Vault during deployment
 resource "azurerm_role_assignment" "current_user_kv_secrets_officer" {
   scope                = module.key_vault.id
   role_definition_name = "Key Vault Secrets Officer"
   principal_id         = data.azurerm_client_config.current.object_id
+}
+
+# Allow deploying user to create/manage Foundry agents
+resource "azurerm_role_assignment" "current_user_ai_project_management" {
+  scope              = module.ai_services.ai_account_id
+  role_definition_id = "/subscriptions/${data.azurerm_client_config.current.subscription_id}/providers/Microsoft.Authorization/roleDefinitions/eadc314b-1a2d-4efa-be10-5d325db5065e"
+  principal_id       = data.azurerm_client_config.current.object_id
+
+  depends_on = [module.ai_services]
+}
+
+# Allow deploying user to invoke agents and use AI services
+resource "azurerm_role_assignment" "current_user_ai_user" {
+  scope              = module.ai_services.ai_account_id
+  role_definition_id = "/subscriptions/${data.azurerm_client_config.current.subscription_id}/providers/Microsoft.Authorization/roleDefinitions/53ca6127-db72-4b80-b1b0-d745d6d5456d"
+  principal_id       = data.azurerm_client_config.current.object_id
+
+  depends_on = [module.ai_services]
 }
 
 # ---------------------------------------------------------------------------
@@ -226,7 +230,8 @@ module "container_apps_ui" {
   managed_identity_id           = module.identity.id
   managed_identity_client_id    = module.identity.client_id
   container_registry_server     = module.container_registry.login_server
-  extra_env_vars                = { API_URL = "${module.apim.gateway_url}/brandsense" }
+  # No extra env vars needed — nginx.conf has http://brnd-api hardcoded
+  # (internal Container Apps DNS, same environment, no TLS).
   tags                          = local.common_tags
 
   depends_on = [azurerm_role_assignment.acr_pull]

@@ -153,31 +153,40 @@ class AgentDeployer:
         ]
 
     def _create_or_update(self, agent_name: str, instructions: str, tools: list) -> str:
-        """Create or update a named agent and return its ID."""
+        """Create a new version of a named agent and return its ID.
+
+        Always calls create_version() so each CI/CD run produces an immutable,
+        versioned artifact (brandsense-auditor:1, :2, …).  This enables rollback:
+        restore the previous agent ID in Key Vault and the API reverts instantly.
+        Old versions are pruned to KEEP_VERSIONS after the new one is created.
+        """
+        KEEP_VERSIONS = 3
+
         definition = PromptAgentDefinition(
             model=self.model_deployment,
             instructions=instructions,
             tools=tools or None,
         )
 
-        existing = None
-        try:
-            existing = self.project_client.agents.get(agent_name)
-        except Exception:
-            pass  # agent does not exist yet
+        agent = self.project_client.agents.create_version(
+            agent_name=agent_name,
+            definition=definition,
+        )
+        logger.info("Created  %-35s id=%s", agent_name, agent.id)
 
-        if existing:
-            agent = self.project_client.agents.update(
-                agent_name=agent_name,
-                definition=definition,
-            )
-            logger.info("Updated  %-35s id=%s", agent_name, agent.id)
-        else:
-            agent = self.project_client.agents.create_version(
-                agent_name=agent_name,
-                definition=definition,
-            )
-            logger.info("Created  %-35s id=%s", agent_name, agent.id)
+        # Prune old versions — keep the most recent KEEP_VERSIONS
+        try:
+            versions = list(self.project_client.agents.list(agent_name=agent_name))
+            # Sort descending by version number so newest are first
+            versions.sort(key=lambda a: getattr(a, "version", 0), reverse=True)
+            for old in versions[KEEP_VERSIONS:]:
+                self.project_client.agents.delete_version(
+                    agent_name=agent_name,
+                    version=old.version,
+                )
+                logger.info("Pruned   %-35s version=%s", agent_name, old.version)
+        except Exception as exc:
+            logger.warning("Could not prune old versions of %s: %s", agent_name, exc)
 
         return agent.id
 
