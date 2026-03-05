@@ -32,3 +32,8 @@ output "ai_project_endpoint" {
   description = "Endpoint URL for the AI Foundry project (azure-ai-projects SDK)"
   value       = "https://${var.ai_account_name}.cognitiveservices.azure.com/api/projects/${var.ai_project_name}/"
 }
+
+output "ai_project_principal_id" {
+  description = "System-assigned managed identity principal ID of the AI Foundry project (used to grant Search access)"
+  value       = azapi_resource.ai_project.identity[0].principal_id
+}

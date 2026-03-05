@@ -190,6 +190,28 @@ module "ai_services" {
   search_service_id       = module.search.id
 }
 
+# Grant the Foundry AI Project's system-assigned identity the two roles required for
+# keyless (AAD) AI Search tool calls inside agents.  Per the official docs at
+# https://aka.ms/foundryazstroubleshooting, both roles are required:
+#   • Search Index Data Contributor — execute queries against the index
+#   • Search Service Contributor    — manage index-level operations
+# Without these the tool call returns 400 "Access denied".
+resource "azurerm_role_assignment" "ai_project_search_index_contributor" {
+  scope                = module.search.id
+  role_definition_name = "Search Index Data Contributor"
+  principal_id         = module.ai_services.ai_project_principal_id
+
+  depends_on = [module.ai_services, module.search]
+}
+
+resource "azurerm_role_assignment" "ai_project_search_service_contributor" {
+  scope                = module.search.id
+  role_definition_name = "Search Service Contributor"
+  principal_id         = module.ai_services.ai_project_principal_id
+
+  depends_on = [module.ai_services, module.search]
+}
+
 # Shared Container Apps Environment — both brnd-api and brnd-ui run in the same env
 resource "azurerm_container_app_environment" "main" {
   name                = "cae-${var.project_name}-${var.environment}"

@@ -37,6 +37,7 @@ from azure.ai.projects import AIProjectClient
 from azure.ai.projects.models import (
     AISearchIndexResource,
     AzureAISearchAgentTool,
+    AzureAISearchQueryType,
     AzureAISearchToolResource,
     PromptAgentDefinition,
 )
@@ -146,6 +147,10 @@ class AgentDeployer:
                         AISearchIndexResource(
                             project_connection_id=self.search_connection_id,
                             index_name="brandsense-guidelines",
+                            # vector_semantic_hybrid uses the content_vector field
+                            # and brandsense-semantic configuration seeded by
+                            # scripts/load/guidelines.py
+                            query_type=AzureAISearchQueryType.VECTOR_SEMANTIC_HYBRID,
                         )
                     ]
                 )
