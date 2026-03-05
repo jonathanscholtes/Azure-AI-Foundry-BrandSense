@@ -110,13 +110,18 @@ if ($currentUserId -and $storageId) {
     $interval = 10
     $ready = $false
     while (-not $ready -and $waited -lt $maxWait) {
-        $testResult = az storage container list `
-            --account-name $TfStateStorageAccount `
-            --auth-mode login `
-            --output none 2>&1
-        if ($LASTEXITCODE -eq 0) {
-            $ready = $true
-        } else {
+        # Suppress stderr — az writes "ERROR:" while the role is still propagating,
+        # which PowerShell treats as a fatal error under $ErrorActionPreference='Stop'.
+        try {
+            $null = az storage container list `
+                --account-name $TfStateStorageAccount `
+                --auth-mode login `
+                --output none `
+                --only-show-errors 2>$null
+            if ($LASTEXITCODE -eq 0) { $ready = $true }
+        } catch { }
+
+        if (-not $ready) {
             Write-Host "  Still propagating... ($waited s elapsed)" -ForegroundColor Gray
             Start-Sleep -Seconds $interval
             $waited += $interval
@@ -296,6 +301,11 @@ if (-not $searchEndpoint) {
 
         Write-Host "Seeding brandsense-guidelines index..." -ForegroundColor Yellow
         $env:AZURE_SEARCH_ENDPOINT = $searchEndpoint
+        # Pass OpenAI endpoint so the integrated vectorizer is configured on the index.
+        # The format used by the AI Services (Foundry) account.
+        if ($aiAccountName) {
+            $env:AZURE_OPENAI_ENDPOINT = "https://${aiAccountName}.cognitiveservices.azure.com/"
+        }
         python "$PSScriptRoot\scripts\load\guidelines.py"
 
         if ($LASTEXITCODE -eq 0) {

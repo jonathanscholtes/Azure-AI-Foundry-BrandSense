@@ -3,7 +3,15 @@ resource "azurerm_search_service" "main" {
   resource_group_name           = var.resource_group_name
   location                      = var.location
   sku                           = var.search_sku
+  semantic_search_sku           = var.semantic_search_sku
   local_authentication_enabled  = false
+
+  # System-assigned identity required for the integrated vectorizer:
+  # the search service calls Azure OpenAI using its own identity to
+  # embed queries at search time (vector_semantic_hybrid mode).
+  identity {
+    type = "SystemAssigned"
+  }
 
   tags = merge(
     var.tags,

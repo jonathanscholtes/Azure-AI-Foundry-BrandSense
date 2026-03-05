@@ -24,6 +24,12 @@ variable "search_sku" {
   }
 }
 
+variable "semantic_search_sku" {
+  description = "Semantic search tier (disabled, free, or standard)"
+  type        = string
+  default     = "free"
+}
+
 variable "identity_principal_id" {
   description = "Principal ID of the managed identity"
   type        = string

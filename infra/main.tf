@@ -68,6 +68,7 @@ module "search" {
   location              = module.resource_group.location
   resource_group_name   = module.resource_group.name
   search_sku            = var.search_sku
+  semantic_search_sku   = var.semantic_search_sku
   identity_principal_id = module.identity.principal_id
   tags                  = local.common_tags
 }
@@ -188,6 +189,19 @@ module "ai_services" {
   embedding_capacity      = var.ai_services_deployment_embedding_capacity
   search_service_endpoint = "https://${var.search_service_name}.search.windows.net"
   search_service_id       = module.search.id
+}
+
+# Grant the AI Search service's system-assigned identity the Cognitive Services OpenAI User
+# role so it can call text-embedding-ada-002 at query time for the integrated vectorizer.
+# This enables vector_semantic_hybrid searches without client-side query embedding.
+# count guards against the first apply before the identity exists in state.
+resource "azurerm_role_assignment" "search_openai_user" {
+  count              = module.search.principal_id != null ? 1 : 0
+  scope              = module.ai_services.ai_account_id
+  role_definition_id = "/subscriptions/${data.azurerm_client_config.current.subscription_id}/providers/Microsoft.Authorization/roleDefinitions/53ca6127-db72-4b80-b1b0-d745d6d5456d"
+  principal_id       = module.search.principal_id
+
+  depends_on = [module.ai_services, module.search]
 }
 
 # Grant the Foundry AI Project's system-assigned identity the two roles required for

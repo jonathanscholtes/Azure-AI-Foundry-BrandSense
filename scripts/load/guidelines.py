@@ -23,6 +23,8 @@ from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 from azure.search.documents import SearchClient
 from azure.search.documents.indexes import SearchIndexClient
 from azure.search.documents.indexes.models import (
+    AzureOpenAIVectorizer,
+    AzureOpenAIParameters,
     HnswAlgorithmConfiguration,
     SearchField,
     SearchFieldDataType,
@@ -71,9 +73,26 @@ def get_index_definition() -> SearchIndex:
         ),
     ]
 
+    # Integrated vectorizer: the search service calls Azure OpenAI directly to embed
+    # queries at search time using its system-assigned managed identity.
+    # This is required for Foundry's vector_semantic_hybrid agent search tool.
+    vectorizer = AzureOpenAIVectorizer(
+        name="ada-002-vectorizer",
+        azure_open_ai_parameters=AzureOpenAIParameters(
+            resource_uri=OPENAI_ENDPOINT.rstrip("/"),
+            deployment_id=EMBEDDING_DEPLOYMENT,
+            model_name=EMBEDDING_DEPLOYMENT,
+        ),
+    )
+
     vector_search = VectorSearch(
         algorithms=[HnswAlgorithmConfiguration(name="hnsw-config")],
-        profiles=[VectorSearchProfile(name="hnsw-profile", algorithm_configuration_name="hnsw-config")],
+        profiles=[VectorSearchProfile(
+            name="hnsw-profile",
+            algorithm_configuration_name="hnsw-config",
+            vectorizer="ada-002-vectorizer",
+        )],
+        vectorizers=[vectorizer],
     )
 
     semantic_search = SemanticSearch(

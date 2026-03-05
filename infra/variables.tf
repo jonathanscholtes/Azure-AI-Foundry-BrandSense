@@ -91,6 +91,17 @@ variable "search_sku" {
   }
 }
 
+variable "semantic_search_sku" {
+  description = "Semantic search tier for AI Search service (disabled, free, or standard)"
+  type        = string
+  default     = "free"
+
+  validation {
+    condition     = contains(["disabled", "free", "standard"], var.semantic_search_sku)
+    error_message = "semantic_search_sku must be one of: disabled, free, standard."
+  }
+}
+
 # API Management Variables
 variable "apim_publisher_name" {
   description = "Publisher name for API Management"
