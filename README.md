@@ -1,32 +1,35 @@
-# 🧠 BrandSense
+# BrandSense
 
 **AI-Powered Marketing Asset Validation on Microsoft Foundry**
 
 BrandSense ingests PDF marketing assets and runs them through a three-agent pipeline that checks brand compliance, legal requirements, and SEO best practices — then produces a structured, scored creative brief.
 
-> **Flow:** User uploads PDF → Researcher Agent (AI Search) → Auditor Agent (PyMuPDF via APIM MCP) → Briefer Agent → Scored creative brief
+> Upload PDF → **Researcher** retrieves guidelines → **Auditor** analyses PDF structure → **Briefer** produces scored brief
 
 ---
 
-## 🎯 Overview
+## Overview
 
-BrandSense demonstrates a production-oriented multi-agent pattern on Microsoft Foundry where three specialised agents collaborate sequentially to analyse marketing content against curated brand, legal, and SEO guidelines.
+BrandSense demonstrates a production-ready multi-agent pattern on [Microsoft Foundry](https://ai.azure.com/) where three specialised agents collaborate sequentially to validate marketing content against curated brand, legal, and SEO guidelines.
 
-**Key capabilities:**
-- Three-agent sequential pipeline orchestrated via the Foundry Responses API
-- AI Search index with vector + semantic search (`vector_semantic_hybrid`) for guideline retrieval
-- Integrated vectorizer using `text-embedding-ada-002` — queries embedded at search time without pre-processing
-- PyMuPDF MCP tool exposed through API Management for structured PDF analysis
-- React + Vite frontend streaming real-time agent progress over ndjson
-- Full infrastructure-as-code with Terraform and automated deployment via PowerShell
+**What you'll learn from this sample:**
+- Orchestrating multiple Foundry agents in a sequential pipeline via the Responses API
+- Connecting agents to external tools using the Model Context Protocol (MCP) through API Management
+- Building an AI Search index with vector + semantic hybrid search and an integrated vectorizer
+- Streaming real-time agent progress to a React frontend over ndjson
+- Full infrastructure-as-code with Terraform and single-command deployment via PowerShell
+
+| | |
+|---|---|
+| ![Compliant validation result](media/validation_compliant.png) | ![Non-compliant validation result](media/validation_wrong_fonts.png) |
 
 ---
 
-## 📐 Architecture
+## Architecture
 
 ```mermaid
 flowchart TD
-    KV["🔐 Azure Key Vault <br/> Agent IDs · APIM key · Secrets"]
+    KV["🔐 Azure Key Vault <br/> Agent IDs · Secrets"]
     SEARCH["🔍 AI Search <br/> brandsense-guidelines index<br/>vector_semantic_hybrid + integrated vectorizer"]
     
 
@@ -72,12 +75,12 @@ flowchart TD
 | **brandsense-briefer** | Microsoft Foundry Agent | Synthesises agent outputs into a scored creative brief |
 | **brandsense-api** | FastAPI, Python | Pipeline orchestration, PyMuPDF MCP server, PDF handling |
 | **brandsense-ui** | React, Vite | Upload interface with real-time streaming progress |
-| **AI Search** | Azure AI Search | Guidelines index with vector + semantic search and integrated vectorizer |
+| **AI Search** | Azure AI Search | Guidelines index with vector + semantic hybrid search and integrated vectorizer |
 | **API Management** | Azure APIM | Exposes the brandsense-api as an MCP server for the Auditor agent |
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 <details>
 <summary>Expand to view repository layout</summary>
@@ -139,27 +142,26 @@ Azure-AI-Foundry-BrandSense/
 │   └── common/
 │       └── DeploymentFunctions.psm1    # Shared PowerShell utilities
 │
-└── docs/                               # Project planning documents
+└── docs/                               # Deployment guide and project documentation
 ```
 
 </details>
 
 ---
 
-## 🚀 Deployment
+## Deployment
 
 ### Prerequisites
 
 | Tool | Version | Notes |
 |---|---|---|
 | Azure CLI | Latest | `az login` authenticated |
-| Terraform | ≥ 1.6 | Infrastructure as Code |
+| Terraform | ≥ 1.5 | Infrastructure as Code |
 | PowerShell | 7+ | Required for deployment scripts |
-| Python | 3.12+ | Agent deploy + index seeding |
-| Docker | Latest | Local container image builds |
+| Python | 3.11+ | Agent deploy + index seeding |
 | GitHub CLI | Latest | Only required for `-SetupGitHub` |
 
-> No Docker required on the deployment machine for image builds — images are built in Azure Container Registry via `az acr build`.
+> Docker is **not** required — container images are built remotely in Azure Container Registry via `az acr build`.
 
 ### 1. Clone the Repository
 
@@ -167,6 +169,8 @@ Azure-AI-Foundry-BrandSense/
 git clone https://github.com/jonathanscholtes/Azure-AI-Foundry-BrandSense.git
 cd Azure-AI-Foundry-BrandSense
 ```
+
+> For the full step-by-step walkthrough (including manual portal steps and teardown), see [docs/deployment_steps.md](docs/deployment_steps.md).
 
 ### 2. Deploy Everything (Single Command)
 
@@ -177,12 +181,7 @@ az account set --subscription "YOUR-SUBSCRIPTION-NAME-OR-ID"
 .\deploy.ps1 -Subscription "YOUR-SUBSCRIPTION-NAME-OR-ID" -SetupGitHub
 ```
 
-Get your Object ID (needed for Key Vault access during deploy):
-```powershell
-az ad signed-in-user show --query id -o tsv
-```
-
-**The deployment runs six phases automatically:**
+**The deployment runs seven phases automatically:**
 
 | Phase | Script | What it does |
 |---|---|---|
@@ -191,20 +190,21 @@ az ad signed-in-user show --query id -o tsv
 | 1.5 — Containers | `Deploy-Containers.ps1` | Builds and pushes API and UI images to ACR |
 | 2 — Seed Index | `scripts/load/guidelines.py` | Creates `brandsense-guidelines` AI Search index with vector + semantic search |
 | 3 — Agents | `Deploy-FoundryAgents.ps1` | Deploys three Foundry agents, writes IDs to Key Vault |
-| 4 — GitHub | `New-GitHubOidc.ps1` | Entra app registration + GitHub OIDC secrets |
+| 3.5 — Configure | `Deploy-ContainerApps.ps1` | Injects agent IDs and Foundry endpoint into the Container App |
+| 4 — GitHub | `New-GitHubOidc.ps1` | Entra app registration + GitHub OIDC secrets *(only with `-SetupGitHub`)* |
 
 **Subsequent deploys** (infrastructure already exists):
 
 ```powershell
-.\deploy.ps1 -Subscription '<subscription>' -SkipBootstrap
+.\deploy.ps1 -Subscription "<subscription>" -SkipBootstrap
 ```
 
-**Resources created (~15–20 min):**
+**Resources created (~20–45 min):**
 
 - Microsoft Foundry account + project + GPT-4.1 and text-embedding-ada-002 deployments
 - AI Search service (basic SKU, semantic search enabled, system-assigned identity)
 - Container Apps environment + brandsense-api + brandsense-ui
-- API Management (Consumption SKU)
+- API Management (default: Consumption SKU)
 - Azure Container Registry
 - Azure Key Vault + User-assigned Managed Identity
 - Storage Account (PDF uploads)
@@ -212,7 +212,7 @@ az ad signed-in-user show --query id -o tsv
 
 ---
 
-## 🔧 Configuration
+## Configuration
 
 <details>
 <summary>Expand to view environment variable reference</summary>
@@ -252,17 +252,18 @@ az ad signed-in-user show --query id -o tsv
 
 ---
 
-## 🔐 Security Model
+## Security Model
 
 - All Azure services authenticate via **Managed Identity** — no connection strings or API keys committed to source control.
-- Agent IDs and the APIM subscription key are stored in **Key Vault** and injected into the Container App as Key Vault references at revision creation time.
+- Agent IDs are stored in **Key Vault** and injected into the Container App as Key Vault references at revision creation time.
 - The AI project system identity holds `Search Index Data Contributor` and `Search Service Contributor` on the AI Search service — required for Foundry to call the search tool.
 - The AI Search system identity holds `Azure AI User` on the AI Foundry account — required for the integrated vectorizer to call Azure OpenAI at query time.
-- The brandsense-api is the only internet-facing MCP server; it is fronted by API Management which enforces subscription key authentication for the Auditor agent.
+- The brandsense-api is the only internet-facing MCP server; it is fronted by API Management for the Auditor agent.
 
 ---
 
-## ✅ Validation Checklist
+<details>
+<summary><b>Validation Checklist</b></summary>
 
 - [ ] `terraform apply` completes with exit 0
 - [ ] `scripts/load/guidelines.py` reports `Upload complete: 38 succeeded, 0 failed`
@@ -271,28 +272,19 @@ az ad signed-in-user show --query id -o tsv
 - [ ] Container App revision picks up updated Key Vault secret values
 - [ ] Uploading a PDF via the UI streams all three agent stages and returns a scored brief
 
----
-
-## 🔌 Post-Deployment: APIM MCP Setup
-
-Two steps require the Azure portal — they cannot be automated through the public API:
-
-### 1. Expose brandsense-api as an MCP Server in APIM
-
-1. **API Management** → **APIs** → **+ Add API** → **MCP Server**
-2. Import OpenAPI spec from `https://<brandsense-api-container-app-url>/openapi.json`
-3. Note the resulting MCP endpoint URL
-
-### 2. Add MCP Tool to brandsense-auditor
-
-1. **Microsoft Foundry portal** → **Agents** → `brandsense-auditor` → **Tools** → **Add tool** → **MCP**
-2. Tool type: **Remote MCP Server**
-3. URL: the APIM MCP endpoint from step 1
-4. Connection: create a **Custom Keys** connection with the APIM subscription key
+</details>
 
 ---
 
-## 🔄 GitHub Actions — What Triggers What
+## Post-Deployment: APIM MCP Setup
+
+Two manual portal steps are required after `deploy.ps1` completes — exposing the API as an MCP server in API Management, and connecting it to the `brandsense-auditor` agent in Microsoft Foundry. These cannot be automated through the public API.
+
+> See [docs/deployment_steps.md](docs/deployment_steps.md#step-4--create-the-apim-mcp-server-manual--portal) for the full walkthrough (Steps 4 and 5).
+
+---
+
+## GitHub Actions
 
 | Files changed | Jobs that run |
 |---|---|
@@ -303,6 +295,11 @@ Two steps require the Azure portal — they cannot be automated through the publ
 | `agents/briefer.py` | `deploy-agents` (briefer only) |
 | `agents/deploy.py` / shared | `deploy-agents` (all agents) |
 | `scripts/load/data/**` | `seed-guidelines` only |
+
+![GitHub Actions deployment workflow](media/gh_action_deployment.png)
+
+<details>
+<summary><b>OIDC Setup &amp; Troubleshooting</b></summary>
 
 ### GitHub Actions OIDC Setup
 
@@ -326,14 +323,17 @@ Two steps require the Azure portal — they cannot be automated through the publ
 
 > Run `deploy.ps1` once locally before pushing to apply the Terraform role assignments that grant the GitHub SP access to Key Vault and AI Foundry. Without this, the `deploy-agents` job will fail with a 403.
 
+</details>
+
 ---
 
-## 🤖 Agents Reference
+<details>
+<summary><b>Agents Reference</b></summary>
 
 | Agent | Foundry name | Key Vault secret | Uses AI Search |
 |---|---|---|---|
 | Researcher | `brandsense-researcher` | `brandsense-researcher-agent-id` | Yes |
-| Auditor | `brandsense-auditor` | `brandsense-auditor-agent-id` | Yes |
+| Auditor | `brandsense-auditor` | `brandsense-auditor-agent-id` | No (uses MCP) |
 | Briefer | `brandsense-briefer` | `brandsense-briefer-agent-id` | No |
 
 To redeploy a single agent:
@@ -345,25 +345,29 @@ To redeploy a single agent:
     -Only auditor
 ```
 
+</details>
+
 ---
 
-## ♻️ Clean Up
+## Clean Up
 
-After completing testing or when no longer needed, delete the resource group to remove all resources and avoid additional charges:
+After completing testing or when no longer needed, tear down all deployed resources:
 
 ```powershell
-az group delete --name rg-brnd-<environment>-<token> --yes --no-wait
+.\deploy.ps1 -Subscription "YOUR-SUBSCRIPTION-NAME-OR-ID" -Destroy
 ```
 
----
-
-## 📜 License
-
-This project is licensed under the [MIT License](LICENSE.md).
+This runs `terraform destroy` on all BrandSense resources. The Terraform state storage account (`rg-tfstate-brnd`) is **not** destroyed and must be removed manually if no longer needed.
 
 ---
 
-## ⚠️ Disclaimer
+## License
+
+This project is licensed under the [MIT License](LICENSE).
+
+---
+
+## Disclaimer
 
 **THIS CODE IS PROVIDED FOR EDUCATIONAL AND DEMONSTRATION PURPOSES ONLY.**
 
