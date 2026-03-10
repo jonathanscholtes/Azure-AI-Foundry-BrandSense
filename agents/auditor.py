@@ -2,7 +2,7 @@
 
 NAME = "brandsense-auditor"
 KV_SECRET = "brandsense-auditor-agent-id"
-USES_SEARCH = True  # brandsense-mcp MCP server is added manually in the Foundry portal
+USES_SEARCH = False  # Uses the brandsense-mcp MCP server (added manually in the Foundry portal), not AI Search
 
 INSTRUCTIONS = """
 You are the BrandSense Marketing Auditor.
