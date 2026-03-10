@@ -54,3 +54,14 @@ variable "search_service_id" {
   description = "Resource ID of the AI Search service for connection metadata"
   type        = string
 }
+
+variable "app_insights_id" {
+  description = "Resource ID of the Application Insights instance"
+  type        = string
+}
+
+variable "app_insights_instrumentation_key" {
+  description = "Instrumentation key of the Application Insights instance"
+  type        = string
+  sensitive   = true
+}

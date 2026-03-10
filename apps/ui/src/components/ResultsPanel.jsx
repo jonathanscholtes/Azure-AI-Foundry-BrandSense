@@ -37,28 +37,37 @@ function ScoreBadge({ score }) {
 
 // --- Issue list per category ----------------------------------------------
 function IssueList({ label, color, issues }) {
-  if (!issues?.length) return null
+  const hasIssues = issues?.length > 0
   return (
     <Box sx={{ mb: 2 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 0.5 }}>
-        <WarningAmberIcon sx={{ fontSize: 14, color }} />
+        {hasIssues
+          ? <WarningAmberIcon sx={{ fontSize: 14, color }} />
+          : <CheckCircleIcon sx={{ fontSize: 14, color: 'success.main' }} />
+        }
         <Typography variant="caption" fontWeight={700} sx={{ color, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
           {label}
         </Typography>
       </Box>
-      <List dense disablePadding>
-        {issues.map((issue, i) => (
-          <ListItem key={i} disablePadding sx={{ alignItems: 'flex-start' }}>
-            <ListItemIcon sx={{ minWidth: 20, mt: '2px' }}>
-              <ArrowRightIcon sx={{ fontSize: 14, color: 'text.disabled' }} />
-            </ListItemIcon>
-            <ListItemText
-              primary={issue}
-              primaryTypographyProps={{ variant: 'body2', color: 'text.secondary' }}
-            />
-          </ListItem>
-        ))}
-      </List>
+      {hasIssues ? (
+        <List dense disablePadding>
+          {issues.map((issue, i) => (
+            <ListItem key={i} disablePadding sx={{ alignItems: 'flex-start' }}>
+              <ListItemIcon sx={{ minWidth: 20, mt: '2px' }}>
+                <ArrowRightIcon sx={{ fontSize: 14, color: 'text.disabled' }} />
+              </ListItemIcon>
+              <ListItemText
+                primary={issue}
+                primaryTypographyProps={{ variant: 'body2', color: 'text.secondary' }}
+              />
+            </ListItem>
+          ))}
+        </List>
+      ) : (
+        <Typography variant="body2" color="text.disabled" sx={{ fontStyle: 'italic' }}>
+          No issues found
+        </Typography>
+      )}
     </Box>
   )
 }

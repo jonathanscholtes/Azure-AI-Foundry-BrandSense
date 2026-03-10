@@ -2,11 +2,7 @@
 # This script coordinates the full end-to-end deployment
 
 param (
-    [Parameter(Mandatory=$false)]
-    [ValidateSet("init", "validate", "plan", "apply", "all", "destroy", "output", "fmt", "clean")]
-    [string]$Action = "all",
-
-    [Parameter(Mandatory=$true)]
+       [Parameter(Mandatory=$true)]
     [string]$Subscription,
 
     [Parameter(Mandatory=$false)]
@@ -14,6 +10,11 @@ param (
 
     [Parameter(Mandatory=$false)]
     [string]$Environment = "dev",
+
+     # Destroy all deployed resources (runs terraform destroy).
+    # When omitted the full deployment pipeline runs (equivalent to terraform apply).
+    [Parameter(Mandatory=$false)]
+    [switch]$Destroy,
 
     # Terraform remote state — storage account must be globally unique.
     # Defaults to 'stotfbrnd' + first 8 hex chars of the subscription ID,
@@ -39,6 +40,8 @@ param (
 Set-StrictMode -Version Latest
 Set-Variable -Name ErrorActionPreference -Value 'Stop'
 
+$Action = if ($Destroy) { "destroy" } else { "all" }
+
 # Import common functions
 Import-Module "$PSScriptRoot\scripts\common\DeploymentFunctions.psm1" -Force
 
@@ -63,9 +66,10 @@ if (-not $TfStateStorageAccount) {
 # ---------------------------------------------------------------------------
 # PHASE 0: Bootstrap Terraform remote state backend
 # (idempotent — safe to run every deploy; skip with -SkipBootstrap after first run)
+# Not needed for destroy — the backend must already exist.
 # ---------------------------------------------------------------------------
-if ($SkipBootstrap) {
-    Write-Host "`n=== PHASE 0: Skipped (backend already exists) ===" -ForegroundColor DarkGray
+if ($Destroy -or $SkipBootstrap) {
+    Write-Host "`n=== PHASE 0: Skipped ===" -ForegroundColor DarkGray
 } else {
 Write-Host "`n=== PHASE 0: Terraform State Backend Bootstrap ===" -ForegroundColor Magenta
 
@@ -173,8 +177,11 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-# Skip remaining phases for non-deployment actions
-if ($Action -in @("output", "fmt", "clean", "validate", "plan", "init")) {
+# Nothing more to do after a destroy
+if ($Destroy) {
+    Write-Host "`n============================================================" -ForegroundColor Green
+    Write-Host "      BrandSense infrastructure destroyed." -ForegroundColor Green
+    Write-Host "============================================================`n" -ForegroundColor Green
     exit 0
 }
 

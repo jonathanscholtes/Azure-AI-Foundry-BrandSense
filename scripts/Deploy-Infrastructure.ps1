@@ -191,8 +191,7 @@ function Test-Prerequisites {
 function Invoke-TerraformApplyWithRetry {
     param(
         [string]$SuccessMessage = "Deployment applied successfully",
-        [int]$MaxRetries = 3,
-        [int]$DelaySeconds = 30
+        [int]$MaxRetries = 3
     )
 
     $retryCount = 0
@@ -203,12 +202,28 @@ function Invoke-TerraformApplyWithRetry {
         Write-Host ""
         Write-Host "Applying... (Attempt $retryCount of $MaxRetries)" -ForegroundColor Yellow
 
-        # Re-plan on retries to avoid "Saved plan is stale" error
+        # Re-plan on retries to avoid "Saved plan is stale" error.
+        # Use -refresh=false to skip the APIM management-plane state refresh —
+        # the Developer SKU endpoint returns 422 during platform upgrades.
         if ($retryCount -gt 1) {
-            Write-Host "Re-planning after partial apply..." -ForegroundColor Cyan
-            terraform plan -out=tfplan
-            if ($LASTEXITCODE -ne 0) {
-                Write-Host "Re-plan failed" -ForegroundColor Red
+            Write-Info "Refreshing Azure CLI token before retry..."
+            az account get-access-token --output none 2>$null
+
+            Write-Info "Re-planning with -refresh=false (skips APIM endpoint)..."
+            $planAttempt = 0
+            $planOk = $false
+            while ($planAttempt -lt 3 -and -not $planOk) {
+                $planAttempt++
+                terraform plan -refresh=false -out=tfplan
+                if ($LASTEXITCODE -eq 0) {
+                    $planOk = $true
+                } elseif ($planAttempt -lt 3) {
+                    Write-Host "Re-plan attempt $planAttempt failed. Waiting 90 seconds..." -ForegroundColor Yellow
+                    Start-Sleep -Seconds 90
+                }
+            }
+            if (-not $planOk) {
+                Write-Host "Re-plan failed after 3 attempts" -ForegroundColor Red
                 exit 1
             }
         }
@@ -220,8 +235,8 @@ function Invoke-TerraformApplyWithRetry {
             terraform output
         } else {
             if ($retryCount -lt $MaxRetries) {
-                Write-Host "Deployment attempt $retryCount failed. Waiting $DelaySeconds seconds before retry..." -ForegroundColor Yellow
-                Start-Sleep -Seconds $DelaySeconds
+                Write-Host "Deployment attempt $retryCount failed. Waiting 120 seconds before retry..." -ForegroundColor Yellow
+                Start-Sleep -Seconds 120
             } else {
                 Write-Host "Deployment failed after $MaxRetries attempts" -ForegroundColor Red
                 exit 1
@@ -337,8 +352,26 @@ switch ($Action.ToLower()) {
         Write-Info "Checking for state drift (importing orphaned resources)..."
         Import-ExistingResources -SubscriptionId $subscriptionId -Environment $Environment
 
-        terraform plan -out=tfplan
-        if ($LASTEXITCODE -ne 0) { exit 1 }
+        # Plan — retry because APIM Developer SKU management endpoint can
+        # return 422 transiently during or after platform maintenance.
+        $planAttempt = 0
+        $planSuccess = $false
+        while ($planAttempt -lt 3 -and -not $planSuccess) {
+            $planAttempt++
+            Write-Info "Generating execution plan (attempt $planAttempt)..."
+            az account get-access-token --output none 2>$null
+            terraform plan -out=tfplan
+            if ($LASTEXITCODE -eq 0) {
+                $planSuccess = $true
+            } elseif ($planAttempt -lt 3) {
+                Write-Host "Plan attempt $planAttempt failed. Waiting 90 seconds for APIM endpoint to stabilize..." -ForegroundColor Yellow
+                Start-Sleep -Seconds 90
+            }
+        }
+        if (-not $planSuccess) {
+            Write-Host "Plan creation failed after 3 attempts" -ForegroundColor Red
+            exit 1
+        }
 
         if (-not $AutoApprove) {
             Write-Host "WARNING: This will create/modify Azure resources" -ForegroundColor Yellow
@@ -372,10 +405,26 @@ switch ($Action.ToLower()) {
         Write-Info "Step 2.5/4: Checking for state drift (importing orphaned resources)..."
         Import-ExistingResources -SubscriptionId $subscriptionId -Environment $Environment
 
-        # Plan
-        Write-Info "Step 3/4: Planning..."
-        terraform plan -out=tfplan
-        if ($LASTEXITCODE -ne 0) { exit 1 }
+        # Plan — retry because APIM Developer SKU management endpoint can
+        # return 422 transiently during or after platform maintenance.
+        $planAttempt = 0
+        $planSuccess = $false
+        while ($planAttempt -lt 3 -and -not $planSuccess) {
+            $planAttempt++
+            Write-Info "Step 3/4: Planning (attempt $planAttempt)..."
+            az account get-access-token --output none 2>$null
+            terraform plan -out=tfplan
+            if ($LASTEXITCODE -eq 0) {
+                $planSuccess = $true
+            } elseif ($planAttempt -lt 3) {
+                Write-Host "Plan attempt $planAttempt failed. Waiting 90 seconds for APIM endpoint to stabilize..." -ForegroundColor Yellow
+                Start-Sleep -Seconds 90
+            }
+        }
+        if (-not $planSuccess) {
+            Write-Host "Plan creation failed after 3 attempts" -ForegroundColor Red
+            exit 1
+        }
 
         # Confirm before apply (unless -AutoApprove)
         if (-not $AutoApprove) {
@@ -405,13 +454,102 @@ switch ($Action.ToLower()) {
             exit 0
         }
 
-        Write-Info "Destroying infrastructure..."
-        terraform destroy -auto-approve
-        if ($LASTEXITCODE -eq 0) {
-            Write-Success "Resources destroyed successfully"
-        } else {
-            Write-Host "Destruction failed" -ForegroundColor Red
+        Write-Info "Generating destruction plan..."
+        Write-Host ""
+
+        # Retry plan-destroy because APIM management endpoint can return 500/422
+        # during platform upgrades or transient failures.
+        $planAttempt = 0
+        $planSuccess = $false
+        while ($planAttempt -lt 5 -and -not $planSuccess) {
+            $planAttempt++
+            Write-Host "Destruction plan attempt $planAttempt of 5..." -ForegroundColor Yellow
+            az account get-access-token --output none 2>$null
+            terraform plan -destroy
+            if ($LASTEXITCODE -eq 0) {
+                $planSuccess = $true
+            } elseif ($planAttempt -lt 5) {
+                $waitSeconds = 60 * $planAttempt
+                Write-Host "Destruction plan attempt $planAttempt failed (APIM endpoint may be down). Waiting $waitSeconds seconds..." -ForegroundColor Yellow
+                Start-Sleep -Seconds $waitSeconds
+            }
+        }
+        if (-not $planSuccess) {
+            Write-Host "ERROR: Failed to generate destruction plan after 5 attempts" -ForegroundColor Red
             exit 1
+        }
+
+        Write-Host ""
+        Write-Info "Destroying infrastructure..."
+
+        # Retry destroy because APIM management endpoint returns 500/422 during
+        # platform upgrades. Terraform tracks partial state, so re-running destroy
+        # safely picks up where the previous attempt left off.
+        $maxDestroyRetries = 5
+        $destroyCount = 0
+        $destroySuccess = $false
+
+        while ($destroyCount -lt $maxDestroyRetries -and -not $destroySuccess) {
+            $destroyCount++
+            Write-Host "Destroy attempt $destroyCount of $maxDestroyRetries..." -ForegroundColor Yellow
+
+            terraform destroy -auto-approve
+
+            if ($LASTEXITCODE -eq 0) {
+                $destroySuccess = $true
+                Write-Success "Resources destroyed successfully"
+            } elseif ($destroyCount -lt $maxDestroyRetries) {
+                $waitSeconds = 60 * $destroyCount
+                Write-Host "Destroy attempt $destroyCount failed (APIM management endpoint may be down). Waiting $waitSeconds seconds before retry..." -ForegroundColor Yellow
+                Start-Sleep -Seconds $waitSeconds
+                az account get-access-token --output none 2>$null
+            }
+        }
+
+        if (-not $destroySuccess) {
+            Write-Host ""
+            Write-Host "Terraform destroy failed after $maxDestroyRetries attempts." -ForegroundColor Yellow
+            Write-Host "Falling back: removing APIM resources from state and deleting the resource group directly." -ForegroundColor Yellow
+            Write-Host "This bypasses the APIM management-plane 500 error." -ForegroundColor Yellow
+            Write-Host ""
+
+            # Remove all APIM resources from Terraform state so the next destroy
+            # does not attempt to call the broken management-plane delete endpoint.
+            $apimStateResources = @(
+                'module.apim.azurerm_api_management_api_operation.extract_fonts',
+                'module.apim.azurerm_api_management_api_operation.validate',
+                'module.apim.azurerm_api_management_api_operation.health',
+                'module.apim.azurerm_api_management_product_api.brandsense',
+                'module.apim.azurerm_api_management_product.brandsense',
+                'module.apim.azurerm_api_management_api.brandsense',
+                'module.apim.azurerm_api_management.main'
+            )
+            foreach ($res in $apimStateResources) {
+                Write-Host "  Removing from state: $res" -ForegroundColor Gray
+                & { $ErrorActionPreference = 'SilentlyContinue'; terraform state rm $res 2>&1 } | Out-Null
+            }
+
+            # Delete the resource group directly — ARM cascade-deletes all child
+            # resources including APIM without going through the management-plane API.
+            $resourceToken     = Get-ResourceToken -SubscriptionId $subscriptionId
+            $resourceGroupName = "rg-brnd-$Environment-$resourceToken"
+            Write-Host ""
+            Write-Host "Deleting resource group '$resourceGroupName' (this may take 10-20 minutes)..." -ForegroundColor Yellow
+            az group delete --name $resourceGroupName --yes
+            if ($LASTEXITCODE -ne 0) {
+                Write-Host "ERROR: Resource group deletion failed." -ForegroundColor Red
+                Write-Host "Delete '$resourceGroupName' manually in the Azure Portal, then re-run -Destroy to clean Terraform state." -ForegroundColor Red
+                exit 1
+            }
+
+            # Final terraform destroy: all Azure resources are gone, so Terraform
+            # will see 404s, mark everything as destroyed, and clean the state file.
+            Write-Host ""
+            Write-Host "Flushing remaining Terraform state entries..." -ForegroundColor Yellow
+            & { $ErrorActionPreference = 'SilentlyContinue'; terraform destroy -auto-approve 2>&1 } |
+                ForEach-Object { Write-Host $_ }
+
+            Write-Success "Resources destroyed via resource group deletion fallback"
         }
     }
     "output" {

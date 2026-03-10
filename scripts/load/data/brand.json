@@ -63,6 +63,15 @@
     "description": "Body copy font size must be no smaller than 10pt in print or 13px in digital. Footnotes and legal disclaimers may use 8pt/11px minimum."
   },
   {
+    "id": "brand-016",
+    "category": "brand",
+    "rule": "Logo presence required",
+    "value": "Brand logo must appear on every externally published marketing asset",
+    "jurisdiction": null,
+    "dimension": null,
+    "description": "Every externally published marketing asset (brochure, one-pager, presentation, data sheet, email, landing page, etc.) must include the brand logo. The logo must appear at minimum on the cover/first page and the back page or footer. Internal-only documents are exempt."
+  },
+  {
     "id": "brand-008",
     "category": "brand",
     "rule": "Logo clear space",

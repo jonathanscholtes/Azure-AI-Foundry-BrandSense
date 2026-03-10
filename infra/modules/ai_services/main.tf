@@ -10,7 +10,7 @@ terraform {
 
 
 resource "azapi_resource" "ai_account" {
-  type      = "Microsoft.CognitiveServices/accounts@2025-06-01"
+  type      = "Microsoft.CognitiveServices/accounts@2025-09-01"
   name      = var.ai_account_name
   location  = var.location
   parent_id = "/subscriptions/${var.subscription_id}/resourceGroups/${var.resource_group_name}"
@@ -44,7 +44,7 @@ resource "azapi_resource" "ai_account" {
 }
 
 resource "azapi_resource" "gpt41_deployment" {
-  type      = "Microsoft.CognitiveServices/accounts/deployments@2025-06-01"
+  type      = "Microsoft.CognitiveServices/accounts/deployments@2025-09-01"
   name      = "gpt-4.1"
   parent_id = azapi_resource.ai_account.id
 
@@ -67,7 +67,7 @@ resource "azapi_resource" "gpt41_deployment" {
 }
 
 resource "azapi_resource" "embedding_deployment" {
-  type      = "Microsoft.CognitiveServices/accounts/deployments@2025-06-01"
+  type      = "Microsoft.CognitiveServices/accounts/deployments@2025-09-01"
   name      = "text-embedding-ada-002"
   parent_id = azapi_resource.ai_account.id
 
@@ -90,7 +90,7 @@ resource "azapi_resource" "embedding_deployment" {
 }
 
 resource "azapi_resource" "ai_project" {
-  type      = "Microsoft.CognitiveServices/accounts/projects@2025-06-01"
+  type      = "Microsoft.CognitiveServices/accounts/projects@2025-09-01"
   name      = var.ai_project_name
   location  = var.location
   parent_id = azapi_resource.ai_account.id
@@ -114,7 +114,7 @@ resource "azapi_resource" "ai_project" {
 # This replaces the 'az ml connection create' approach (which targets ML workspaces,
 # not Cognitive Services projects).
 resource "azapi_resource" "search_connection" {
-  type      = "Microsoft.CognitiveServices/accounts/projects/connections@2025-06-01"
+  type      = "Microsoft.CognitiveServices/accounts/projects/connections@2025-09-01"
   name      = "brandsense-search"
   parent_id = azapi_resource.ai_project.id
 
@@ -127,6 +127,35 @@ resource "azapi_resource" "search_connection" {
       metadata = {
         ApiType    = "Azure"
         ResourceId = var.search_service_id
+      }
+    }
+  }
+
+  depends_on = [azapi_resource.ai_project]
+}
+
+# Register Application Insights as a connection inside the Foundry project.
+resource "azapi_resource" "appinsights_connection" {
+  type      = "Microsoft.CognitiveServices/accounts/projects/connections@2025-09-01"
+  name      = "brandsense-appinsights"
+  parent_id = azapi_resource.ai_project.id
+
+  body = {
+    properties = {
+      authType          = "ApiKey"
+      category          = "AppInsights"
+      target            = var.app_insights_id
+      isSharedToAll     = true
+      useWorkspaceManagedIdentity = false
+      credentials = {
+        key = var.app_insights_instrumentation_key
+      }
+      sharedUserList = []
+      peRequirement  = "NotRequired"
+      peStatus       = "NotApplicable"
+      metadata = {
+        ApiType    = "Azure"
+        ResourceId = var.app_insights_id
       }
     }
   }

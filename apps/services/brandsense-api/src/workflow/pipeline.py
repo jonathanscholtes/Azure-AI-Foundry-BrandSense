@@ -255,12 +255,14 @@ async def run_pipeline(
         # ── Step 2 — Marketing Auditor ──────────────────────────────────
         yield _progress("auditor", "running", "Analysing asset against guidelines…")
 
-        # Build a compact font/colour summary (cap spans to avoid huge context)
+        # Build a compact font/colour/image summary (cap spans to avoid huge context)
         font_summary = json.dumps(
             {
                 "unique_fonts": font_metadata["unique_fonts"],
                 "unique_colors": font_metadata["unique_colors"],
                 "metadata": font_metadata["metadata"],
+                "image_count": font_metadata["image_count"],
+                "images": font_metadata["images"],
                 "sample_spans": font_metadata["fonts"][:50],
             },
             indent=2,
@@ -272,7 +274,7 @@ async def run_pipeline(
             (
                 "## Asset Text Content\n"
                 f"{asset_text[:50_000]}\n\n"
-                "## Font and Color Metadata (from PyMuPDF)\n"
+                "## Font, Color, and Image Metadata (from PyMuPDF)\n"
                 f"{font_summary}\n\n"
                 "## Guidelines from Researcher\n"
                 f"{researcher_output}\n\n"
