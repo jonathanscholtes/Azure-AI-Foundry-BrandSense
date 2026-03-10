@@ -19,7 +19,7 @@ BrandSense demonstrates a production-ready multi-agent pattern on [Microsoft Fou
 - Streaming real-time agent progress to a React frontend over ndjson
 - Full infrastructure-as-code with Terraform and single-command deployment via PowerShell
 
-| | |
+| **Compliant** — all checks pass, scored brief generated | **Non-compliant** — font violations flagged, remediation suggested |
 |---|---|
 | ![Compliant validation result](media/validation_compliant.png) | ![Non-compliant validation result](media/validation_wrong_fonts.png) |
 
