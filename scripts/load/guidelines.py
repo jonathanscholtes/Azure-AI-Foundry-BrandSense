@@ -24,7 +24,7 @@ from azure.search.documents import SearchClient
 from azure.search.documents.indexes import SearchIndexClient
 from azure.search.documents.indexes.models import (
     AzureOpenAIVectorizer,
-    AzureOpenAIParameters,
+    AzureOpenAIVectorizerParameters,
     HnswAlgorithmConfiguration,
     SearchField,
     SearchFieldDataType,
@@ -78,7 +78,7 @@ def get_index_definition() -> SearchIndex:
     # This is required for Foundry's vector_semantic_hybrid agent search tool.
     vectorizer = AzureOpenAIVectorizer(
         name="ada-002-vectorizer",
-        azure_open_ai_parameters=AzureOpenAIParameters(
+        azure_open_ai_parameters=AzureOpenAIVectorizerParameters(
             resource_uri=OPENAI_ENDPOINT.rstrip("/"),
             deployment_id=EMBEDDING_DEPLOYMENT,
             model_name=EMBEDDING_DEPLOYMENT,

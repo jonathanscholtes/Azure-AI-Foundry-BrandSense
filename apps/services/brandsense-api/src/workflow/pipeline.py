@@ -239,12 +239,21 @@ async def run_pipeline(
         # ── Step 1 — Marketing Researcher ───────────────────────────────
         yield _progress("researcher", "running", "Retrieving brand, legal, and SEO guidelines…")
 
+        # Cap context to 2 000 chars so it never bloats the AI Search query
+        # (Azure AI Search rejects queries > 100 000 characters).
+        context_snippet = context[:2_000]
+        if len(context) > 2_000:
+            logger.warning(
+                "Campaign context truncated from %d to 2000 chars for Researcher query",
+                len(context),
+            )
+
         researcher_output = await _run_agent(
             openai_client,
             settings.researcher_agent_id,
             (
                 f"Asset filename: {filename}\n"
-                f"Campaign context: {context}\n\n"
+                f"Campaign context: {context_snippet}\n\n"
                 "Please retrieve all relevant brand, legal, and SEO guidelines "
                 "for reviewing this marketing asset."
             ),
@@ -268,16 +277,40 @@ async def run_pipeline(
             indent=2,
         )
 
+        # Cap individual sections so the combined auditor message stays well
+        # under the 100 000-character AI Search query limit.
+        #
+        # asset_text strategy: head (45k) + tail (5k) rather than a plain
+        # prefix slice.  Copyright notices live in page footers, which appear
+        # at the END of the extracted text; a prefix-only truncation would
+        # silently drop them, causing false legal-001 failures on longer PDFs.
+        # The Auditor does not query Azure AI Search so the 100k Search limit
+        # does not apply here — limit is purely the model context window.
+        _ASSET_HEAD = 45_000
+        _ASSET_TAIL = 5_000
+        if len(asset_text) > _ASSET_HEAD + _ASSET_TAIL:
+            asset_text_snippet = (
+                asset_text[:_ASSET_HEAD]
+                + "\n\n[... content truncated ...]\n\n"
+                + asset_text[-_ASSET_TAIL:]
+            )
+            logger.warning(
+                "Asset text truncated: %d chars kept (head %d + tail %d) of %d total",
+                _ASSET_HEAD + _ASSET_TAIL, _ASSET_HEAD, _ASSET_TAIL, len(asset_text),
+            )
+        else:
+            asset_text_snippet = asset_text
+
         auditor_output = await _run_agent(
             openai_client,
             settings.auditor_agent_id,
             (
                 "## Asset Text Content\n"
-                f"{asset_text[:50_000]}\n\n"
+                f"{asset_text_snippet}\n\n"
                 "## Font, Color, and Image Metadata (from PyMuPDF)\n"
                 f"{font_summary}\n\n"
                 "## Guidelines from Researcher\n"
-                f"{researcher_output}\n\n"
+                f"{researcher_output[:20_000]}\n\n"
                 "Please audit this marketing asset against all the guidelines above."
             ),
         )
