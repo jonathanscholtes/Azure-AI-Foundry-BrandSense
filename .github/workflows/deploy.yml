@@ -67,6 +67,7 @@ jobs:
       container_app_ui_name:        ${{ steps.tf-out.outputs.container_app_ui_name }}
       container_app_url:            ${{ steps.tf-out.outputs.container_app_url }}
       search_endpoint:              ${{ steps.tf-out.outputs.search_endpoint }}
+      openai_endpoint:              ${{ steps.tf-out.outputs.openai_endpoint }}
       ai_project_endpoint:          ${{ steps.tf-out.outputs.ai_project_endpoint }}
       key_vault_name:               ${{ steps.tf-out.outputs.key_vault_name }}
     steps:
@@ -99,6 +100,7 @@ jobs:
           echo "container_app_ui_name=$(terraform output -raw container_app_ui_name)"        >> $GITHUB_OUTPUT
           echo "container_app_url=$(terraform output -raw container_app_url)"                >> $GITHUB_OUTPUT
           echo "search_endpoint=$(terraform output -raw search_service_endpoint)"            >> $GITHUB_OUTPUT
+          echo "openai_endpoint=$(terraform output -raw openai_endpoint)"                    >> $GITHUB_OUTPUT
           echo "ai_project_endpoint=$(terraform output -raw ai_project_endpoint)"            >> $GITHUB_OUTPUT
           echo "key_vault_name=$(terraform output -raw key_vault_name)"                      >> $GITHUB_OUTPUT
 
@@ -187,6 +189,7 @@ jobs:
       - name: Seed guidelines index
         env:
           AZURE_SEARCH_ENDPOINT: ${{ needs.read-infra.outputs.search_endpoint }}
+          AZURE_OPENAI_ENDPOINT: ${{ needs.read-infra.outputs.openai_endpoint }}
         run: python scripts/load/guidelines.py
 
   # ---------------------------------------------------------------------------
