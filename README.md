@@ -45,11 +45,11 @@ flowchart TD
     end
 
     subgraph CONTAINER_APPS["Azure Container Apps"]
-        API["⚙️ brandsense-api\nFastAPI · pipeline orchestration · PyMuPDF MCP"]
-        UI["🖥️ brandsense-ui\nReact + Vite · ndjson streaming"]
+        API["⚙️ brandsense-api<br/>FastAPI · pipeline orchestration · PyMuPDF MCP"]
+        UI["🖥️ brandsense-ui<br/>React + Vite · ndjson streaming"]
     end
 
-    APIM["🔀 API Management\nMCP Server endpoint"]
+    APIM["🔀 API Management<br/>MCP Server endpoint"]
    
 
     UI -->|"Upload PDF"| API
