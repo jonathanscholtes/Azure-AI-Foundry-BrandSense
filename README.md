@@ -135,9 +135,6 @@ Azure-AI-Foundry-BrandSense/
 │   ├── Deploy-Infrastructure.ps1       # Phase 1: Terraform apply
 │   ├── Deploy-Containers.ps1           # Phase 1.5: ACR image build & push
 │   ├── Deploy-FoundryAgents.ps1        # Phase 3: Agent deploy + Key Vault write
-│   ├── Deploy-APIM-Configuration.ps1   # APIM policy configuration
-│   ├── Deploy-ContainerApps.ps1        # Container App revision updates
-│   ├── Deploy-Dashboards.ps1           # Azure Monitor dashboard deployment
 │   ├── New-GitHubOidc.ps1             # GitHub Actions OIDC setup
 │   └── common/
 │       └── DeploymentFunctions.psm1    # Shared PowerShell utilities
@@ -190,7 +187,7 @@ az account set --subscription "YOUR-SUBSCRIPTION-NAME-OR-ID"
 | 1.5 — Containers | `Deploy-Containers.ps1` | Builds and pushes API and UI images to ACR |
 | 2 — Seed Index | `scripts/load/guidelines.py` | Creates `brandsense-guidelines` AI Search index with vector + semantic search |
 | 3 — Agents | `Deploy-FoundryAgents.ps1` | Deploys three Foundry agents, writes IDs to Key Vault |
-| 3.5 — Configure | `Deploy-ContainerApps.ps1` | Injects agent IDs and Foundry endpoint into the Container App |
+| 3.5 — Configure | *(inline)* | Injects agent IDs and Foundry endpoint into the Container App |
 | 4 — GitHub | `New-GitHubOidc.ps1` | Entra app registration + GitHub OIDC secrets *(only with `-SetupGitHub`)* |
 
 **Subsequent deploys** (infrastructure already exists):
