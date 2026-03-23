@@ -77,10 +77,10 @@ def get_index_definition() -> SearchIndex:
     # queries at search time using its system-assigned managed identity.
     # This is required for Foundry's vector_semantic_hybrid agent search tool.
     vectorizer = AzureOpenAIVectorizer(
-        name="ada-002-vectorizer",
-        azure_open_ai_parameters=AzureOpenAIVectorizerParameters(
-            resource_uri=OPENAI_ENDPOINT.rstrip("/"),
-            deployment_id=EMBEDDING_DEPLOYMENT,
+        vectorizer_name="ada-002-vectorizer",
+        parameters=AzureOpenAIVectorizerParameters(
+            resource_url=OPENAI_ENDPOINT.rstrip("/"),
+            deployment_name=EMBEDDING_DEPLOYMENT,
             model_name=EMBEDDING_DEPLOYMENT,
         ),
     )
@@ -90,7 +90,7 @@ def get_index_definition() -> SearchIndex:
         profiles=[VectorSearchProfile(
             name="hnsw-profile",
             algorithm_configuration_name="hnsw-config",
-            vectorizer="ada-002-vectorizer",
+            vectorizer_name="ada-002-vectorizer",
         )],
         vectorizers=[vectorizer],
     )
