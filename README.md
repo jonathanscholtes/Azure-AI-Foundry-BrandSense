@@ -1,9 +1,25 @@
 # Multi-Agent AI Pipeline with Microsoft Foundry
 ### End-to-End Example with Sequential Agent Orchestration
 
+
 This project demonstrates how to build a **multi-agent AI system** using Microsoft Foundry, where agents collaborate in a structured, sequential pipeline.
 
 > Upload PDF → **Researcher** retrieves guidelines → **Auditor** analyses PDF structure → **Briefer** produces scored brief
+
+---
+
+## Contents
+
+- [Start Here](#start-here)
+- [Multi-agent pipeline pattern](#multi-agent-pipeline-pattern)
+- [Architecture](#architecture)
+- [Project Structure](#project-structure)
+- [Deployment](#deployment)
+- [Configuration](#configuration)
+- [Security Model](#security-model)
+- [Post-Deployment: APIM MCP Setup](#post-deployment-apim-mcp-setup)
+- [GitHub Actions](#github-actions)
+- [Clean Up](#clean-up)
 
 ---
 
@@ -21,71 +37,56 @@ If you're exploring:
 
 ---
 
-## What this demonstrates
+## Multi-agent pipeline pattern
 
-This is not just a demo—it’s a **reusable architectural pattern**.
+Single-agent systems become brittle as workflows grow in complexity.
 
-You’ll learn how to:
+When tasks require multiple stages of reasoning—retrieval, analysis, synthesis—forcing everything through a single agent reduces control, observability, and reliability.
 
-- Orchestrate multiple Foundry agents in a sequential workflow
-- Pass context between agents across stages
-- Integrate external tools using MCP (Model Context Protocol)
-- Combine retrieval (AI Search) with agent reasoning
-- Stream real-time agent progress to a frontend
-- Deploy everything using infrastructure-as-code
+This project implements a **sequential multi-agent pipeline**, where each agent has a clearly defined responsibility:
 
----
+- **Researcher** → retrieves relevant context
+- **Auditor** → analyzes structure and content
+- **Briefer** → synthesizes a final result
 
-## The Problem This Solves
+This pattern enables:
 
-Single-agent systems struggle with complex, multi-step workflows.
-
-This project shows how to:
-
-- Break tasks into **specialized responsibilities**
-- Chain agents into a **controlled execution flow**
-- Improve reliability and interpretability of AI systemst
+- Separation of concerns across agents
+- More predictable and debuggable behavior
+- Clear orchestration of multi-step workflows
+- Easier extension and reuse across domains
 
 ---
 
-### When to Use This Pattern
+### When to use this pattern
 
-Use a **sequential multi-agent pipeline** when:
+Use a sequential pipeline when:
 
-- Tasks require multiple stages of reasoning
-- Different responsibilities can be separated (retrieval, analysis, synthesis)
-- You want more control than a single-agent system provides
+- Workflows require multiple stages of reasoning
+- Responsibilities can be cleanly separated
+- You need more control than a single-agent system provides
 
 Avoid when:
 
 - Tasks are simple or single-step
-- Latency must be extremely low
+- Latency requirements are strict
 - A single prompt can solve the problem reliably
 
---- 
+### Adapt this to your domain
 
-### How to adapt this to your domain
+The example scenario (marketing PDF validation) is interchangeable. The same structure applies to:
 
-The example scenario (marketing validation) is interchangeable. The same pipeline structure applies to:
+- **Enterprise document processing** → classify, extract, validate
+- **Customer support automation** → retrieve context, analyse intent, generate response
+- **Compliance workflows** → check rules, validate structure, produce audit report
 
-- **Document processing** — extract, classify, summarise
-- **Customer support automation** — retrieve policies, analyse request, draft response
-- **Compliance and validation** — retrieve rules, audit artefact, produce report
-- **Data enrichment workflows** — retrieve context, analyse record, write enriched output
+To adapt: replace the **Researcher** with your data source, modify the **Auditor** for your domain logic, and customise the **Briefer** output format.
 
-To adapt: replace the **Researcher** with your data retrieval logic, modify the **Auditor** for your domain-specific analysis, and customise the **Briefer** output format.
+### Example: BrandSense
 
----
-
-### Example Use Case (BrandSense)
-
-This implementation uses a marketing validation scenario:
-
-- **Researcher** → Retrieves brand, legal, SEO guidelines  
-- **Auditor** → Analyzes PDF structure and content  
-- **Briefer** → Produces a scored creative brief  
-
-> This is just an example—the pattern is reusable across domains.
+- **Researcher** → Retrieves brand, legal, and SEO guidelines from AI Search
+- **Auditor** → Analyses PDF structure and content via MCP tool
+- **Briefer** → Produces a scored creative brief
 
 
 
