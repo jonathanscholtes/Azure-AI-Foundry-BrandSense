@@ -1,23 +1,93 @@
-# BrandSense
+# Multi-Agent AI Pipeline with Microsoft Foundry
+### End-to-End Example with Sequential Agent Orchestration
 
-**AI-Powered Marketing Asset Validation on Microsoft Foundry**
-
-BrandSense ingests PDF marketing assets and runs them through a three-agent pipeline that checks brand compliance, legal requirements, and SEO best practices — then produces a structured, scored creative brief.
+This project demonstrates how to build a **multi-agent AI system** using Microsoft Foundry, where agents collaborate in a structured, sequential pipeline.
 
 > Upload PDF → **Researcher** retrieves guidelines → **Auditor** analyses PDF structure → **Briefer** produces scored brief
 
 ---
 
-## Overview
+## Start Here
 
-BrandSense demonstrates a production-ready multi-agent pattern on [Microsoft Foundry](https://ai.azure.com/) where three specialised agents collaborate sequentially to validate marketing content against curated brand, legal, and SEO guidelines.
+If you're exploring:
 
-**What you'll learn from this sample:**
-- Orchestrating multiple Foundry agents in a sequential pipeline via the Responses API
-- Connecting agents to external tools using the Model Context Protocol (MCP) through API Management
-- Building an AI Search index with vector + semantic hybrid search and an integrated vectorizer
-- Streaming real-time agent progress to a React frontend over ndjson
-- Full infrastructure-as-code with Terraform and single-command deployment via PowerShell
+- How to design **agent-based AI systems**
+- How to orchestrate **multiple agents in a pipeline**
+- How to move beyond **single-agent architectures**
+
+→ this project provides a complete, working reference implementation.
+
+> **Want the thinking behind the design?** Read the companion post: [Designing Sequential Multi-Agent Pipelines with Microsoft Foundry](https://stochasticcoder.com/2026/03/12/designing-sequential-multi-agent-pipelines-with-microsoft-foundry/)
+
+---
+
+## What this demonstrates
+
+This is not just a demo—it’s a **reusable architectural pattern**.
+
+You’ll learn how to:
+
+- Orchestrate multiple Foundry agents in a sequential workflow
+- Pass context between agents across stages
+- Integrate external tools using MCP (Model Context Protocol)
+- Combine retrieval (AI Search) with agent reasoning
+- Stream real-time agent progress to a frontend
+- Deploy everything using infrastructure-as-code
+
+---
+
+## The Problem This Solves
+
+Single-agent systems struggle with complex, multi-step workflows.
+
+This project shows how to:
+
+- Break tasks into **specialized responsibilities**
+- Chain agents into a **controlled execution flow**
+- Improve reliability and interpretability of AI systemst
+
+---
+
+### When to Use This Pattern
+
+Use a **sequential multi-agent pipeline** when:
+
+- Tasks require multiple stages of reasoning
+- Different responsibilities can be separated (retrieval, analysis, synthesis)
+- You want more control than a single-agent system provides
+
+Avoid when:
+
+- Tasks are simple or single-step
+- Latency must be extremely low
+- A single prompt can solve the problem reliably
+
+--- 
+
+### How to adapt this to your domain
+
+The example scenario (marketing validation) is interchangeable. The same pipeline structure applies to:
+
+- **Document processing** — extract, classify, summarise
+- **Customer support automation** — retrieve policies, analyse request, draft response
+- **Compliance and validation** — retrieve rules, audit artefact, produce report
+- **Data enrichment workflows** — retrieve context, analyse record, write enriched output
+
+To adapt: replace the **Researcher** with your data retrieval logic, modify the **Auditor** for your domain-specific analysis, and customise the **Briefer** output format.
+
+---
+
+### Example Use Case (BrandSense)
+
+This implementation uses a marketing validation scenario:
+
+- **Researcher** → Retrieves brand, legal, SEO guidelines  
+- **Auditor** → Analyzes PDF structure and content  
+- **Briefer** → Produces a scored creative brief  
+
+> This is just an example—the pattern is reusable across domains.
+
+
 
 | **Compliant** — all checks pass, scored brief generated | **Non-compliant** — font violations flagged, remediation suggested |
 |---|---|
